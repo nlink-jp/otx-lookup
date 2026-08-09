@@ -51,11 +51,18 @@ func (w *Workspace) WriteJSONL(name string, records []json.RawMessage) (string, 
 	if err != nil {
 		return "", fmt.Errorf("create %s in workspace: %w", safe, err)
 	}
-	defer f.Close()
 	for _, rec := range records {
 		if _, err := f.Write(append(compact(rec), '\n')); err != nil {
+			_ = f.Close()
 			return "", fmt.Errorf("write %s: %w", safe, err)
 		}
+	}
+	// Close is checked, not deferred. A buffered write can fail here — a full
+	// disk surfaces at close, not at write — and a deferred Close would let
+	// this return a path to a truncated file while telling the caller how many
+	// records it holds.
+	if err := f.Close(); err != nil {
+		return "", fmt.Errorf("close %s: %w", safe, err)
 	}
 	return filepath.Join(w.dir, safe), nil
 }
@@ -74,9 +81,12 @@ func (w *Workspace) WriteJSON(name string, v any) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("create %s in workspace: %w", safe, err)
 	}
-	defer f.Close()
 	if _, err := f.Write(append(b, '\n')); err != nil {
+		_ = f.Close()
 		return "", fmt.Errorf("write %s: %w", safe, err)
+	}
+	if err := f.Close(); err != nil {
+		return "", fmt.Errorf("close %s: %w", safe, err)
 	}
 	return filepath.Join(w.dir, safe), nil
 }

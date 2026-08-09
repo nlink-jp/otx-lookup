@@ -22,7 +22,7 @@ func TestIndicatorSectionPathAndEscaping(t *testing.T) {
 	var gotPath string
 	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		gotPath = r.URL.EscapedPath()
-		w.Write([]byte(`{}`))
+		_, _ = w.Write([]byte(`{}`))
 	})
 
 	if _, err := c.IndicatorSection(context.Background(), "domain", "example.com", "general"); err != nil {
@@ -51,7 +51,7 @@ func TestAPIKeyTravelsOnlyInTheHeader(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotHeader = r.Header.Get("X-OTX-API-KEY")
 		gotRawQuery = r.URL.RawQuery
-		w.Write([]byte(`{}`))
+		_, _ = w.Write([]byte(`{}`))
 	}))
 	defer srv.Close()
 
@@ -107,7 +107,7 @@ func TestGeneralDecodesMeasuredShapes(t *testing.T) {
 	    }]
 	  }
 	}`
-	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) { w.Write([]byte(body)) })
+	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte(body)) })
 
 	g, err := c.General(context.Background(), "domain", "paypal.com")
 	if err != nil {
@@ -190,7 +190,7 @@ func TestStatusMapping(t *testing.T) {
 	for _, tc := range tests {
 		c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(tc.status)
-			w.Write([]byte(tc.body))
+			_, _ = w.Write([]byte(tc.body))
 		})
 		_, err := c.IndicatorSection(context.Background(), "domain", "example.com", "general")
 		if err == nil {
@@ -207,7 +207,7 @@ func TestStatusMapping(t *testing.T) {
 func TestUpstreamMessageIsSurfaced(t *testing.T) {
 	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte(`{"detail":"Invalid IPv4 address"}`))
+		_, _ = w.Write([]byte(`{"detail":"Invalid IPv4 address"}`))
 	})
 	_, err := c.IndicatorSection(context.Background(), "IPv4", "not-an-ip", "general")
 	if err == nil {
@@ -220,7 +220,7 @@ func TestUpstreamMessageIsSurfaced(t *testing.T) {
 
 func TestNonJSONBodyIsADecodeError(t *testing.T) {
 	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("<html>maintenance</html>"))
+		_, _ = w.Write([]byte("<html>maintenance</html>"))
 	})
 	_, err := c.IndicatorSection(context.Background(), "domain", "example.com", "general")
 	if got := Code(err); got != CodeDecode {
@@ -235,7 +235,7 @@ func TestKeyOnlyEndpointsFailWithoutARequest(t *testing.T) {
 	requests := 0
 	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		requests++
-		w.Write([]byte(`{}`))
+		_, _ = w.Write([]byte(`{}`))
 	})
 
 	if _, err := c.PulseIndicators(context.Background(), "abc", 1, 10); Code(err) != CodeAuthRequired {
@@ -259,7 +259,7 @@ func TestKeyOnlyEndpointsFailWithoutARequest(t *testing.T) {
 // above, and the reason the key is optional at all.
 func TestPulseDetailWorksAnonymously(t *testing.T) {
 	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"id":"abc"}`))
+		_, _ = w.Write([]byte(`{"id":"abc"}`))
 	})
 	if _, err := c.Pulse(context.Background(), "abc"); err != nil {
 		t.Errorf("Pulse without a key: %v", err)
@@ -273,7 +273,7 @@ func TestPagingParameters(t *testing.T) {
 	var gotQuery string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotQuery = r.URL.Query().Encode()
-		w.Write([]byte(`{}`))
+		_, _ = w.Write([]byte(`{}`))
 	}))
 	defer srv.Close()
 	c := New(srv.URL, "key", time.Second, 0, "ua")
@@ -294,7 +294,7 @@ func TestSearchAsksForNewestFirst(t *testing.T) {
 	var gotSort string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotSort = r.URL.Query().Get("sort")
-		w.Write([]byte(`{"count":0,"results":[]}`))
+		_, _ = w.Write([]byte(`{"count":0,"results":[]}`))
 	}))
 	defer srv.Close()
 	c := New(srv.URL, "key", time.Second, 0, "ua")
@@ -311,7 +311,7 @@ func TestSearchAsksForNewestFirst(t *testing.T) {
 // budget of two per window, the third request must wait for the first to age
 // out.
 func TestLimiterPacesAgainstTheLocalCeiling(t *testing.T) {
-	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) { w.Write([]byte(`{}`)) })
+	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte(`{}`)) })
 	c.limiter = &limiter{max: 2, window: time.Hour}
 
 	now := time.Unix(1_700_000_000, 0)
@@ -336,7 +336,7 @@ func TestLimiterPacesAgainstTheLocalCeiling(t *testing.T) {
 }
 
 func TestLimiterDisabledWhenBudgetIsZero(t *testing.T) {
-	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) { w.Write([]byte(`{}`)) })
+	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte(`{}`)) })
 	c.Sleep = func(d time.Duration) { t.Fatalf("slept %v with no budget configured", d) }
 	for i := 0; i < 5; i++ {
 		if _, err := c.IndicatorSection(context.Background(), "domain", "example.com", "general"); err != nil {
@@ -346,7 +346,7 @@ func TestLimiterDisabledWhenBudgetIsZero(t *testing.T) {
 }
 
 func TestRequestsCounter(t *testing.T) {
-	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) { w.Write([]byte(`{}`)) })
+	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte(`{}`)) })
 	c.limiter = &limiter{max: 100, window: time.Hour}
 	for i := 0; i < 3; i++ {
 		if _, err := c.IndicatorSection(context.Background(), "domain", "example.com", "general"); err != nil {
@@ -359,7 +359,7 @@ func TestRequestsCounter(t *testing.T) {
 }
 
 func TestContextCancellationIsANetworkError(t *testing.T) {
-	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) { w.Write([]byte(`{}`)) })
+	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte(`{}`)) })
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	_, err := c.IndicatorSection(ctx, "domain", "example.com", "general")
@@ -384,7 +384,7 @@ func TestRawMessagePreservedForUnknownFields(t *testing.T) {
 	// A CVE response has a completely different top-level shape. Decoding must
 	// not fail, and the body must survive for --json.
 	body := `{"indicator":"CVE-2021-44228","cvss":{"Score":9.3},"epss":0.97,"exploits":[],"pulse_info":{"count":0,"pulses":[]}}`
-	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) { w.Write([]byte(body)) })
+	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte(body)) })
 	g, err := c.General(context.Background(), "cve", "CVE-2021-44228")
 	if err != nil {
 		t.Fatalf("General: %v", err)

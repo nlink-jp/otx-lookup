@@ -29,7 +29,7 @@ const liveShapedDetail = `{
 
 func TestPulseDetailDecodesTheLiveShape(t *testing.T) {
 	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(liveShapedDetail))
+		_, _ = w.Write([]byte(liveShapedDetail))
 	})
 
 	p, err := c.PulseDetail(context.Background(), "693096c1cabeccbc6b3a5def")
@@ -69,7 +69,7 @@ func TestPulseDetailDecodesTheLiveShape(t *testing.T) {
 // form was measured, and the detail's own arrays have only been seen empty.
 func TestNamedRefAndAttackIDAcceptBothForms(t *testing.T) {
 	body := `{"id":"p","malware_families":["Qakbot"],"attack_ids":["T1041"],"indicators":[]}`
-	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) { w.Write([]byte(body)) })
+	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte(body)) })
 
 	p, err := c.PulseDetail(context.Background(), "p")
 	if err != nil {
@@ -91,7 +91,7 @@ func TestPulseIndicatorPageRequiresAKeyAndDecodes(t *testing.T) {
 	requests := 0
 	anon, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		requests++
-		w.Write([]byte(body))
+		_, _ = w.Write([]byte(body))
 	})
 	if _, err := anon.PulseIndicatorPage(context.Background(), "p", 1, 10); Code(err) != CodeAuthRequired {
 		t.Errorf("code = %q, want %q", Code(err), CodeAuthRequired)
@@ -159,7 +159,7 @@ func TestSearchSurvivesAnyExactMatchType(t *testing.T) {
 
 func TestDecodeErrorsAreReported(t *testing.T) {
 	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`{"indicators": "not an array"}`))
+		_, _ = w.Write([]byte(`{"indicators": "not an array"}`))
 	})
 	if _, err := c.PulseDetail(context.Background(), "p"); Code(err) != CodeDecode {
 		t.Errorf("code = %q, want %q (err: %v)", Code(err), CodeDecode, err)
@@ -171,7 +171,7 @@ func TestDecodeErrorsAreReported(t *testing.T) {
 func TestHTMLErrorBodyIsNotEchoed(t *testing.T) {
 	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusGatewayTimeout)
-		w.Write([]byte("<html>\n<head><title>504 Gateway Time-out</title></head>\n</html>"))
+		_, _ = w.Write([]byte("<html>\n<head><title>504 Gateway Time-out</title></head>\n</html>"))
 	})
 	_, err := c.Pulse(context.Background(), "p")
 	if err == nil {
@@ -192,10 +192,10 @@ func newKeyedServer(t *testing.T, body string) string {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("X-OTX-API-KEY") == "" {
 			w.WriteHeader(http.StatusForbidden)
-			w.Write([]byte(`{"detail":"forbidden"}`))
+			_, _ = w.Write([]byte(`{"detail":"forbidden"}`))
 			return
 		}
-		w.Write([]byte(body))
+		_, _ = w.Write([]byte(body))
 	}))
 	t.Cleanup(srv.Close)
 	return srv.URL

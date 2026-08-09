@@ -34,7 +34,7 @@ func TestAuthCheckWithAValidKey(t *testing.T) {
 func TestAuthCheckWithARejectedKey(t *testing.T) {
 	isolate(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusForbidden)
-		w.Write([]byte(`{"detail":"Authentication required"}`))
+		_, _ = w.Write([]byte(`{"detail":"Authentication required"}`))
 	})
 	t.Setenv("OTX_LOOKUP_API_KEY", "typo-key")
 
@@ -56,7 +56,7 @@ func TestAuthCheckWithoutAKeySpendsNoRequest(t *testing.T) {
 	requests := 0
 	isolate(t, func(w http.ResponseWriter, r *http.Request) {
 		requests++
-		w.Write([]byte(accountBody))
+		_, _ = w.Write([]byte(accountBody))
 	})
 
 	code, out, _ := runCmd(t, "auth", "check")
@@ -83,7 +83,7 @@ func TestAuthCheckWithoutAKeySpendsNoRequest(t *testing.T) {
 func TestAuthCheckDistinguishesAnOutageFromABadKey(t *testing.T) {
 	isolate(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(`{"detail":"boom"}`))
+		_, _ = w.Write([]byte(`{"detail":"boom"}`))
 	})
 	t.Setenv("OTX_LOOKUP_API_KEY", "good-key")
 
@@ -126,7 +126,7 @@ func TestAuthCheckStatusIsFourValued(t *testing.T) {
 	t.Run("rejected", func(t *testing.T) {
 		isolate(t, func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusForbidden)
-			w.Write([]byte(`{"detail":"Authentication required"}`))
+			_, _ = w.Write([]byte(`{"detail":"Authentication required"}`))
 		})
 		t.Setenv("OTX_LOOKUP_API_KEY", "k")
 		if got := statusOf(t, "auth", "check", "--json"); got != "rejected" {
@@ -136,7 +136,7 @@ func TestAuthCheckStatusIsFourValued(t *testing.T) {
 	t.Run("unreachable", func(t *testing.T) {
 		isolate(t, func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte(`{"detail":"boom"}`))
+			_, _ = w.Write([]byte(`{"detail":"boom"}`))
 		})
 		t.Setenv("OTX_LOOKUP_API_KEY", "k")
 		if got := statusOf(t, "auth", "check", "--json"); got != "unreachable" {
@@ -200,7 +200,7 @@ func TestAuthCheckHonoursAnonymous(t *testing.T) {
 	requests := 0
 	isolate(t, func(w http.ResponseWriter, r *http.Request) {
 		requests++
-		w.Write([]byte(accountBody))
+		_, _ = w.Write([]byte(accountBody))
 	})
 	t.Setenv("OTX_LOOKUP_API_KEY", "good-key")
 

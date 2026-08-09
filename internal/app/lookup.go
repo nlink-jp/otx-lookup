@@ -116,7 +116,7 @@ func readTargets(args []string, input string, stdin io.Reader) ([]string, error)
 		if err != nil {
 			return nil, fmt.Errorf("open %s: %w", input, err)
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 		lines, err := readLines(f)
 		if err != nil {
 			return nil, fmt.Errorf("read %s: %w", input, err)

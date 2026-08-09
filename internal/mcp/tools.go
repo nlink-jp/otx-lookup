@@ -267,7 +267,7 @@ func (s *Server) spill(root, name string, records []json.RawMessage) (string, er
 	if err != nil {
 		return "", err
 	}
-	defer ws.Close()
+	defer func() { _ = ws.Close() }()
 	return ws.WriteJSONL(name, records)
 }
 

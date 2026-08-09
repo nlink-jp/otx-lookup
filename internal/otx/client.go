@@ -266,7 +266,7 @@ func (c *Client) get(ctx context.Context, path string, query url.Values) (json.R
 	if err != nil {
 		return nil, &Error{Code: CodeNetwork, Message: fmt.Sprintf("request %s: %v", path, err)}
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBody))
 	if err != nil {

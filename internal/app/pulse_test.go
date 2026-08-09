@@ -123,10 +123,10 @@ func TestPulseFallsBackToTheEmbeddedSet(t *testing.T) {
 	isolate(t, func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.EscapedPath(), "/indicators") {
 			w.WriteHeader(http.StatusInternalServerError)
-			w.Write([]byte(`{"detail":"boom"}`))
+			_, _ = w.Write([]byte(`{"detail":"boom"}`))
 			return
 		}
-		w.Write([]byte(pulseDetailBody))
+		_, _ = w.Write([]byte(pulseDetailBody))
 	})
 	t.Setenv("OTX_LOOKUP_API_KEY", "k")
 
@@ -216,7 +216,7 @@ func TestSearchWithoutAKeyExplainsItself(t *testing.T) {
 	requests := 0
 	isolate(t, func(w http.ResponseWriter, r *http.Request) {
 		requests++
-		w.Write([]byte(`{}`))
+		_, _ = w.Write([]byte(`{}`))
 	})
 
 	code, _, errOut := runCmd(t, "search", "qakbot")
@@ -257,7 +257,7 @@ func TestSearchJoinsMultipleWords(t *testing.T) {
 	var gotQuery string
 	isolate(t, func(w http.ResponseWriter, r *http.Request) {
 		gotQuery = r.URL.Query().Get("q")
-		w.Write([]byte(`{"count":0,"results":[]}`))
+		_, _ = w.Write([]byte(`{"count":0,"results":[]}`))
 	})
 	t.Setenv("OTX_LOOKUP_API_KEY", "k")
 
@@ -346,7 +346,7 @@ func TestAnonymousAppliesToPulse(t *testing.T) {
 	var sawKey string
 	isolate(t, func(w http.ResponseWriter, r *http.Request) {
 		sawKey = r.Header.Get("X-OTX-API-KEY")
-		w.Write([]byte(pulseDetailBody))
+		_, _ = w.Write([]byte(pulseDetailBody))
 	})
 	t.Setenv("OTX_LOOKUP_API_KEY", "secret-key")
 

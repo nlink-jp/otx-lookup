@@ -48,6 +48,7 @@ check: lint test build-all
 ## e2e: Live end-to-end tests against the real OTX API (network required)
 e2e: build
 	go test -tags e2e -count=1 ./e2e/...
+	@scripts/e2e.sh
 
 ## package: Build all platforms, archive with version suffix (zip for
 ## darwin/windows, tar.gz for linux), bundle the canonical binary +

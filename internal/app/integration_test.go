@@ -42,10 +42,10 @@ func routes(m map[string]string) http.HandlerFunc {
 		body, ok := m[r.URL.EscapedPath()]
 		if !ok {
 			w.WriteHeader(http.StatusNotFound)
-			w.Write([]byte(`{"detail":"not found"}`))
+			_, _ = w.Write([]byte(`{"detail":"not found"}`))
 			return
 		}
-		w.Write([]byte(body))
+		_, _ = w.Write([]byte(body))
 	}
 }
 
@@ -232,7 +232,7 @@ func TestInvalidTargetExitsTwoWithoutRequesting(t *testing.T) {
 	requests := 0
 	isolate(t, func(w http.ResponseWriter, r *http.Request) {
 		requests++
-		w.Write([]byte(emptyBody))
+		_, _ = w.Write([]byte(emptyBody))
 	})
 
 	code, _, errOut := lookup(t, "", "not a target")
@@ -251,7 +251,7 @@ func TestInvalidTargetExitsTwoWithoutRequesting(t *testing.T) {
 func TestUpstreamFailureExitsOne(t *testing.T) {
 	isolate(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(`{"detail":"boom"}`))
+		_, _ = w.Write([]byte(`{"detail":"boom"}`))
 	})
 
 	code, _, errOut := lookup(t, "", "evil.test")
@@ -282,7 +282,7 @@ func TestDefaultFetchesOnlyGeneral(t *testing.T) {
 	var paths []string
 	isolate(t, func(w http.ResponseWriter, r *http.Request) {
 		paths = append(paths, r.URL.EscapedPath())
-		w.Write([]byte(richBody))
+		_, _ = w.Write([]byte(richBody))
 	})
 
 	if code, _, errOut := lookup(t, "", "evil.test"); code != exitOK {
@@ -322,7 +322,7 @@ func TestUnknownSectionIsAUsageError(t *testing.T) {
 	requests := 0
 	isolate(t, func(w http.ResponseWriter, r *http.Request) {
 		requests++
-		w.Write([]byte(emptyBody))
+		_, _ = w.Write([]byte(emptyBody))
 	})
 
 	code, _, errOut := lookup(t, "", "--sections", "whois", "8.8.8.8")
@@ -358,7 +358,7 @@ func TestAnonymousDropsTheConfiguredKey(t *testing.T) {
 	var sawKey string
 	isolate(t, func(w http.ResponseWriter, r *http.Request) {
 		sawKey = r.Header.Get("X-OTX-API-KEY")
-		w.Write([]byte(richBody))
+		_, _ = w.Write([]byte(richBody))
 	})
 	t.Setenv("OTX_LOOKUP_API_KEY", "secret-key")
 
@@ -402,7 +402,7 @@ func TestCacheAndRefresh(t *testing.T) {
 	requests := 0
 	isolate(t, func(w http.ResponseWriter, r *http.Request) {
 		requests++
-		w.Write([]byte(richBody))
+		_, _ = w.Write([]byte(richBody))
 	})
 
 	if code, _, _ := lookup(t, "", "evil.test"); code != exitOK {
@@ -433,10 +433,10 @@ func TestInconclusiveEmptyResultIsLoudAndExitsNonZero(t *testing.T) {
 	isolate(t, func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.EscapedPath(), "/domain/") {
 			w.WriteHeader(http.StatusTooManyRequests)
-			w.Write([]byte(`{"detail":"rate limited"}`))
+			_, _ = w.Write([]byte(`{"detail":"rate limited"}`))
 			return
 		}
-		w.Write([]byte(`{"indicator":"paypal.com","pulse_info":{"count":0,"pulses":[]}}`))
+		_, _ = w.Write([]byte(`{"indicator":"paypal.com","pulse_info":{"count":0,"pulses":[]}}`))
 	})
 
 	code, out, _ := lookup(t, "", "paypal.com")

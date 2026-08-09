@@ -74,6 +74,10 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- `internal/workspace` deferred its `Close` on both write paths, so a failure
+  at close — a full disk surfaces there, not at write — would have returned the
+  path to a truncated file while reporting how many records it held. Close is
+  now checked. Found by errcheck.
 - Pulse search failed to decode every response. `exact_match` is documented as
   a boolean and arrives as a string; declaring it `bool` made the whole search
   error out. It is now kept raw, and a test covers every type it could take.
@@ -92,6 +96,12 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `doc.go` and in AGENTS.md, measured against the live API rather than taken
   from the documentation — including the two endpoints that need an API key.
 - The MCP server refuses a nil input stream instead of panicking.
+- Live end-to-end suite behind the `e2e` build tag: 12 Go tests plus 27
+  binary-level checks in `scripts/e2e.sh` covering exit codes, the stdout/stderr
+  split, JSON and JSONL output, and a full MCP stdio session. Fixtures are
+  chosen for stability and never assert an exact pulse count.
+- `.golangci.yml` excluding only `fmt.Fprint*` to the CLI's own streams, so
+  errcheck stays meaningful everywhere else. `make check` is green.
 
 ## [0.1.0]
 

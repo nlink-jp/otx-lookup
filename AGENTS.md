@@ -33,6 +33,46 @@ Go 1.25.0, standard library only — `go.mod` has no `require` block. Shared cod
 (the release scripts, the sectioned-TOML reader, the `internal/mcp` skeleton)
 is vendored from sibling projects rather than imported, matching the series.
 
+## Tests
+
+**Offline suite** (`make test`, `go test -race -cover ./...`): injected
+`engine.Fetcher` / `otx.Doer` stubs for unit tests, plus an `httptest.Server`
+reached through `OTX_LOOKUP_BASE_URL` for the `internal/app` integration tests,
+which exercise the whole flags → config → engine → otx → output path. Every test
+sets `XDG_CONFIG_HOME` and `XDG_CACHE_HOME` to a tempdir and clears every
+`OTX_*` variable, so the suite never touches the network, the developer's real
+config, or their API key.
+
+`internal/mcp/usage_test.go` holds meta-tests that pin `usage.md` to the code —
+every tool name, every argument and every error code must appear in the manual,
+because the manual is what an agent reads before its first call.
+
+**Live suite** (`make e2e`, network required, excluded from `go test ./...` by
+the `e2e` build tag): 12 tagged Go tests in `e2e/live_test.go` plus 27
+binary-level checks in `scripts/e2e.sh`. Tests needing an API key skip cleanly
+without one. Roughly 20 requests total — keep it that way; OTX returns 429s and
+504s under ordinary development traffic.
+
+Two live tests carry most of the weight:
+
+- `TestLiveDetailIsNotTruncated` compares the indicators embedded in a pulse
+  detail against the paginated endpoint's `count`. The anonymous pivot — the
+  feature that makes this tool useful without a key — rests entirely on those
+  agreeing. If upstream starts paging the detail, every anonymous pivot
+  silently becomes partial, and this is the only thing that would notice.
+- `TestLiveNameFallbackResolves` proves a registrable domain still answers under
+  `domain` after being asked as `hostname` first.
+
+**Fixtures are chosen for stability, and never assert an exact pulse count.**
+Pulses are community submissions that appear and vanish daily; a test pinned to
+a number becomes a false alarm within weeks. Assert behaviour instead. Note that
+even RFC 5737 documentation addresses are not clean: `192.0.2.1` carries pulses.
+
+`.golangci.yml` excludes exactly one thing — `fmt.Fprint*` to the CLI's own
+streams — and nothing else. errcheck stays on everywhere else because it is what
+caught a real defect here: a deferred `Close` in `internal/workspace` could have
+returned the path to a truncated file while reporting how many records it held.
+
 ## Layout
 
 ```

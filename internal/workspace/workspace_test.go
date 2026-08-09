@@ -13,7 +13,7 @@ func TestWriteJSONLOneRecordPerLine(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	defer w.Close()
+	defer func() { _ = w.Close() }()
 
 	records := []json.RawMessage{
 		json.RawMessage("{\n  \"indicator\": \"a.test\"\n}"),
@@ -46,7 +46,7 @@ func TestWriteJSONLKeepsTheFileParseable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	defer w.Close()
+	defer func() { _ = w.Close() }()
 
 	path, err := w.WriteJSONL("mixed.jsonl", []json.RawMessage{
 		json.RawMessage(`{"ok":true}`),
@@ -68,7 +68,7 @@ func TestWriteJSON(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	defer w.Close()
+	defer func() { _ = w.Close() }()
 
 	path, err := w.WriteJSON("pulse.json", map[string]any{"id": "abc", "n": 2})
 	if err != nil {
@@ -95,7 +95,7 @@ func TestNamesCannotEscapeTheWorkspace(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	defer w.Close()
+	defer func() { _ = w.Close() }()
 
 	for _, name := range []string{
 		"../escaped.jsonl",
@@ -142,7 +142,7 @@ func TestSymlinkOutOfTheWorkspaceIsRefused(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	defer w.Close()
+	defer func() { _ = w.Close() }()
 
 	if _, err := w.WriteJSONL("link.jsonl", []json.RawMessage{json.RawMessage(`{"x":1}`)}); err == nil {
 		if _, statErr := os.Stat(outside); statErr == nil {
@@ -157,7 +157,7 @@ func TestOpenCreatesTheDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	defer w.Close()
+	defer func() { _ = w.Close() }()
 	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
 		t.Errorf("Open did not create the directory: %v", err)
 	}
