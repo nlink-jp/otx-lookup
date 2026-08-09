@@ -10,47 +10,30 @@ import (
 	"os"
 	"sort"
 	"strings"
-	"time"
 
-	"github.com/nlink-jp/otx-lookup/internal/cache"
 	"github.com/nlink-jp/otx-lookup/internal/config"
 	"github.com/nlink-jp/otx-lookup/internal/engine"
 	"github.com/nlink-jp/otx-lookup/internal/otx"
 )
 
-type lookupFlags struct {
-	sections  string
-	limit     int
-	anonymous bool
-	jsonOut   bool
-	refresh   bool
-	timeout   time.Duration
-	input     string
-	config    string
-}
-
 func runLookup(args []string, version string, stdin io.Reader, stdout, stderr io.Writer) int {
-	var f lookupFlags
+	var f commonFlags
+	var sections, input string
+	var limit int
 	fs := flag.NewFlagSet("lookup", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	fs.Usage = func() { usage(stderr) }
-	fs.StringVar(&f.sections, "sections", "", "comma-separated extra sections to fetch")
-	fs.IntVar(&f.limit, "limit", 0, "pulses to list (default from config)")
-	fs.BoolVar(&f.anonymous, "anonymous", false, "query without the configured API key")
-	fs.BoolVar(&f.jsonOut, "json", false, "JSON output (JSONL for multiple targets)")
-	fs.BoolVar(&f.jsonOut, "j", false, "JSON output (shorthand)")
-	fs.BoolVar(&f.refresh, "refresh", false, "bypass the result cache and re-query")
-	fs.DurationVar(&f.timeout, "timeout", 0, "network timeout (e.g. 10s)")
-	fs.StringVar(&f.input, "input", "", "read newline-separated targets from a file (- for stdin)")
-	fs.StringVar(&f.config, "config", "", "config file path")
-	fs.StringVar(&f.config, "c", "", "config file path (shorthand)")
+	f.register(fs)
+	fs.StringVar(&sections, "sections", "", "comma-separated extra sections to fetch")
+	fs.IntVar(&limit, "limit", 0, "pulses to list (default from config)")
+	fs.StringVar(&input, "input", "", "read newline-separated targets from a file (- for stdin)")
 
 	positional, err := parseInterleaved(fs, args)
 	if err != nil {
 		return exitError
 	}
 
-	targets, err := readTargets(positional, f.input, stdin)
+	targets, err := readTargets(positional, input, stdin)
 	if err != nil {
 		fmt.Fprintf(stderr, "otx-lookup: %v\n", err)
 		return exitError
@@ -61,20 +44,13 @@ func runLookup(args []string, version string, stdin io.Reader, stdout, stderr io
 		return exitError
 	}
 
-	cfg, err := config.Load(f.config, f.timeout)
+	cfg, eng, err := f.build(version)
 	if err != nil {
 		fmt.Fprintf(stderr, "otx-lookup: %v\n", err)
 		return exitError
 	}
-	if f.anonymous {
-		cfg = cfg.Anonymous()
-	}
 
-	sections := splitList(f.sections)
-	client := otx.New(cfg.BaseURL, cfg.APIKey, cfg.Timeout, cfg.RateCeiling(), "otx-lookup/"+version)
-	eng := engine.New(cfg, &cache.Store{Dir: cfg.CacheDir}, client)
-
-	opts := engine.Options{Sections: sections, Limit: f.limit, Refresh: f.refresh}
+	opts := engine.Options{Sections: splitList(sections), Limit: limit, Refresh: f.refresh}
 	multiple := len(targets) > 1
 
 	// Exit-code accounting. An invalid target is the operator's own mistake and
@@ -119,30 +95,6 @@ func runLookup(args []string, version string, stdin io.Reader, stdout, stderr io
 		return exitPartial
 	default:
 		return exitOK
-	}
-}
-
-// parseInterleaved parses flags that appear anywhere among the targets, and
-// returns the positional arguments.
-//
-// Go's flag package stops at the first non-flag argument, so a plain Parse
-// would read `lookup paypal.com --limit 3` as three targets and silently ignore
-// the limit. Writing the target first is the natural way to type this, and a
-// flag that is quietly dropped is worse than one that is rejected — so parse in
-// rounds, taking one positional at a time.
-func parseInterleaved(fs *flag.FlagSet, args []string) ([]string, error) {
-	var positional []string
-	rest := args
-	for {
-		if err := fs.Parse(rest); err != nil {
-			return nil, err
-		}
-		rest = fs.Args()
-		if len(rest) == 0 {
-			return positional, nil
-		}
-		positional = append(positional, rest[0])
-		rest = rest[1:]
 	}
 }
 

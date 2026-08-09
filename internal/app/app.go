@@ -35,9 +35,14 @@ func run(args []string, version string, stdin io.Reader, stdout, stderr io.Write
 	switch cmd {
 	case "lookup":
 		return runLookup(rest, version, stdin, stdout, stderr)
-	case "pulse", "search", "cache", "mcp":
-		fmt.Fprintf(stderr, "otx-lookup: %s is not implemented yet\n", cmd)
-		return exitError
+	case "pulse":
+		return runPulse(rest, version, stdout, stderr)
+	case "search":
+		return runSearch(rest, version, stdout, stderr)
+	case "cache":
+		return runCache(rest, stdout, stderr)
+	case "mcp":
+		return runMCP(rest, version, stdin, stdout, stderr)
 	case "version", "--version", "-v":
 		printVersion(stdout, version)
 		return exitOK
@@ -69,22 +74,32 @@ Usage:
 
 Commands:
   lookup <indicator ...>   Pulses and campaign context for an indicator
-  pulse <pulse_id>         Pulse detail (--indicators needs an API key)
+  pulse <pulse_id>         Pulse detail; --indicators lists what it carries
   search <query>           Search pulses (needs an API key)
   cache status             Show the result-cache state
   cache clear              Clear the result cache
   mcp                      Run as a local MCP server (stdio)
   version                  Print the version
 
-Lookup flags:
-  --sections <list>        Fetch sections that are off by default
-  --limit <n>              Pulses to show (default 10)
+Shared flags:
   --anonymous              Query without the configured API key
-  -j, --json               JSON output (JSONL when multiple targets)
+  -j, --json               JSON output (JSONL for multiple lookup targets)
   --refresh                Bypass the result cache and re-query
   --timeout <dur>          Network timeout (e.g. 10s; default 30s)
-  --input <file>           Read newline-separated targets from a file
   -c, --config <path>      Config file (default ~/.config/otx-lookup/config.toml)
+
+lookup flags:
+  --sections <list>        Fetch sections that are off by default
+  --limit <n>              Pulses to show (default 10)
+  --input <file>           Read newline-separated targets from a file
+
+pulse flags:
+  --indicators             List the indicators the pulse carries
+  --limit <n>              Maximum indicators to list
+
+search flags:
+  --limit <n>              Results per page
+  --page <n>               Page number
 
 The indicator type is detected from its shape: IPv4, IPv6, domain, hostname,
 URL, file hash (MD5 / SHA1 / SHA256), or CVE. Bulk input: pass multiple
@@ -106,8 +121,11 @@ them. This tool reports what was claimed; it never declares an indicator
 malicious or benign on its own.
 
 An API key is optional. Without one, every indicator section and the pulse
-detail are still reachable; a key adds the pulse indicator list, pulse search,
-and a higher rate ceiling. Note that queries made with a key are recorded
-against your OTX account — use --anonymous when that matters.
+detail are still reachable — and the detail embeds the pulse's indicators, so
+pivoting from a pulse to the rest of a campaign works anonymously too. What a
+key adds is the paginated indicator endpoint (the only one that reports how many
+indicators a pulse really holds), pulse search, and a higher rate ceiling. Note
+that queries made with a key are recorded against your OTX account — use
+--anonymous when that matters.
 `)
 }

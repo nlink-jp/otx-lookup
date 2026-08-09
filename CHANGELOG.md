@@ -31,6 +31,23 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   10,000 with a key), since OTX returns no remaining-budget header.
 - TTL result cache with atomic writes, scoped so keyed and anonymous answers
   never share an entry.
+- `pulse <id>` — one pulse in full, with `--indicators` to list what it carries.
+  This is the pivot from a single indicator to the rest of a campaign, and it
+  works **without an API key**: the pulse detail response embeds the indicators.
+  The detail reports no total, so the count is stated as unknown rather than
+  guessed; with a key the paginated endpoint answers and the count is exact.
+- `search <query>` — pulse search. Requires an API key, and says so precisely
+  without spending a request when there is none.
+- `cache status` and `cache clear`, with `--json`.
+- `mcp` — a dependency-free stdio JSON-RPC 2.0 MCP server exposing
+  `lookup_indicator`, `get_pulse`, `search_pulses`, `cache_status` and
+  `get_usage`, with an embedded manual that meta-tests pin to the code: every
+  tool, every argument and every error code must appear in it. Tool failures
+  are returned as results with `{code, message}` rather than as protocol
+  errors, so the model sees them. Large pulse and indicator lists are written
+  as JSON Lines under `workspace_root`, contained with `os.Root`.
+- Shared flags (`--anonymous`, `--json`, `--refresh`, `--timeout`, `--config`)
+  are declared once and mean the same thing in every command.
 
 - Project scaffold: module `github.com/nlink-jp/otx-lookup`, `main.go` at the
   repository root, the `internal/` package skeleton (`indicator`, `otx`,
@@ -56,11 +73,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Internal
 
-- `pulse`, `search`, `cache` and `mcp` are dispatched but not yet implemented;
-  they exit 2 saying so.
 - The upstream behaviour each package must account for is recorded in its
   `doc.go` and in AGENTS.md, measured against the live API rather than taken
-  from the documentation.
+  from the documentation. Two exceptions are marked as such in the code:
+  `search/pulses` and `pulses/{id}/indicators` return 403 without an API key,
+  so their shapes come from the published documentation and are tested against
+  stubs only.
+- The MCP server refuses a nil input stream instead of panicking.
 
 ## [0.1.0]
 

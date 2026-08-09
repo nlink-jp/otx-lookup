@@ -31,7 +31,7 @@ otx-lookup lookup 203.0.113.10 --sections reputation,passive_dns
 # 設定済みの API キーを使わずに照会する（OTX アカウントに記録させない）
 otx-lookup lookup 203.0.113.10 --anonymous
 
-# pulse を読み、そこに載る IoC へピボットする（--indicators は API キー必須）
+# pulse を読み、そこに載る IoC へピボットする（API キー不要）
 otx-lookup pulse 693096c1cabeccbc6b3a5def
 otx-lookup pulse 693096c1cabeccbc6b3a5def --indicators
 
@@ -145,9 +145,18 @@ Claude Code への登録:
 |---|---|---|
 | indicator の全 section（全型） | 可 | 可 |
 | pulse 詳細・関連 pulse | 可 | 可 |
-| pulse 内の IoC 一覧 | 不可 | 可 |
+| pulse が抱える IoC 一覧 | 可 — 詳細応答が内包している | 可、**さらに正確な総数** |
 | pulse 検索 | 不可 | 可 |
 | レート上限 | 1,000 req/h | 10,000 req/h |
+
+**ピボットはキー無しで動く** — ここが重要である。pulse 詳細の応答は pulse の IoC を内包しているので、`pulse <id> --indicators` は匿名で返る。ただし詳細応答には**総数が無い**（件数もページカーソルも無い）。途中で切れた集合と完全な集合が区別できないということなので、otx-lookup は推測せずそう言う。
+
+```
+indicators: 4 returned; the total is unknown — the pulse detail reports none,
+            and the endpoint that does needs an API key
+```
+
+キーがあればページング対応の endpoint が答え、件数は正確になる（`indicators: 4 of 4090`）。
 
 キーを付けた照会は OTX アカウントに記録される。キーを必要としない照会について、意図的にキーを使わないのが `--anonymous` である。
 

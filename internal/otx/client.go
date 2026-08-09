@@ -121,9 +121,53 @@ func (c *Client) Pulse(ctx context.Context, id string) (json.RawMessage, error) 
 	return c.get(ctx, "/pulses/"+url.PathEscape(id), nil)
 }
 
+// PulseDetail fetches and decodes a pulse. Answers anonymously, and the
+// response embeds an `indicators` array — which is what makes pivoting from a
+// pulse to its other indicators possible without a key.
+func (c *Client) PulseDetail(ctx context.Context, id string) (*PulseDetail, error) {
+	raw, err := c.Pulse(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	var p PulseDetail
+	if err := json.Unmarshal(raw, &p); err != nil {
+		return nil, &Error{Code: CodeDecode, Message: fmt.Sprintf("decode pulse %s: %v", id, err)}
+	}
+	p.Raw = raw
+	return &p, nil
+}
+
 // PulseRelated fetches the pulses related to a pulse. Answers anonymously.
 func (c *Client) PulseRelated(ctx context.Context, id string) (json.RawMessage, error) {
 	return c.get(ctx, "/pulses/"+url.PathEscape(id)+"/related", nil)
+}
+
+// PulseIndicatorPage fetches one page of a pulse's indicators, decoded.
+func (c *Client) PulseIndicatorPage(ctx context.Context, id string, page, limit int) (*IndicatorPage, error) {
+	raw, err := c.PulseIndicators(ctx, id, page, limit)
+	if err != nil {
+		return nil, err
+	}
+	var p IndicatorPage
+	if err := json.Unmarshal(raw, &p); err != nil {
+		return nil, &Error{Code: CodeDecode, Message: fmt.Sprintf("decode indicators of pulse %s: %v", id, err)}
+	}
+	p.Raw = raw
+	return &p, nil
+}
+
+// Search runs a pulse search, decoded.
+func (c *Client) Search(ctx context.Context, query string, page, limit int) (*SearchResults, error) {
+	raw, err := c.SearchPulses(ctx, query, page, limit)
+	if err != nil {
+		return nil, err
+	}
+	var s SearchResults
+	if err := json.Unmarshal(raw, &s); err != nil {
+		return nil, &Error{Code: CodeDecode, Message: fmt.Sprintf("decode search results for %q: %v", query, err)}
+	}
+	s.Raw = raw
+	return &s, nil
 }
 
 // PulseIndicators fetches the indicators inside a pulse.
@@ -245,10 +289,14 @@ func upstreamDetail(body []byte) string {
 			return ": " + msg
 		}
 	}
-	if s := strings.TrimSpace(string(body)); s != "" && len(s) <= 200 {
-		return ": " + s
+	s := strings.TrimSpace(string(body))
+	// A gateway error arrives as an HTML page (a 504 from OTX is a full
+	// <html> document). Pasting markup into an operator's terminal explains
+	// nothing the status code did not already say.
+	if s == "" || strings.HasPrefix(s, "<") || len(s) > 200 {
+		return ""
 	}
-	return ""
+	return ": " + s
 }
 
 func firstNonEmpty(a, b string) string {

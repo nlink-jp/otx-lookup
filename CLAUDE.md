@@ -101,10 +101,10 @@ the engine's clock and sleep injected) so tests are deterministic and offline.
 
 ## Status
 
-Phase 1 (core) complete and verified against the live API: indicator
-classification, config, cache, the OTX client, the engine, and `lookup`.
-`pulse`, `search`, `cache` and `mcp` are dispatched but not implemented and exit
-2 saying so; that is Phase 2. Design:
+Phases 1 and 2 complete: `lookup`, `pulse`, `search`, `cache` and the MCP
+server. Verified against the live API except `search_pulses` and the paginated
+pulse-indicator endpoint, which need an API key and are stub-tested only — see
+AGENTS.md. Next is Phase 3 (live e2e, release). Design:
 [docs/ja/otx-lookup-rfp.ja.md](docs/ja/otx-lookup-rfp.ja.md).
 
 ## Communication Language

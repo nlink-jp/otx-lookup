@@ -1,6 +1,7 @@
 package otx
 
 import (
+	"bytes"
 	"encoding/json"
 	"time"
 )
@@ -134,12 +135,140 @@ func (n NamedRef) Label() string {
 	return n.ID
 }
 
+// UnmarshalJSON accepts either the object form or a bare string.
+//
+// The pulse summary inside pulse_info uses objects. The pulse detail's own
+// malware_families has only ever been observed empty, so the bare-string form
+// cannot be ruled out — and a shape difference between two representations of
+// the same field would otherwise fail the whole decode.
+func (n *NamedRef) UnmarshalJSON(b []byte) error {
+	if s, ok, err := decodeBareString(b); ok {
+		n.ID, n.DisplayName = s, s
+		return err
+	}
+	type plain NamedRef
+	var p plain
+	if err := json.Unmarshal(b, &p); err != nil {
+		return err
+	}
+	*n = NamedRef(p)
+	return nil
+}
+
 // AttackID is a MITRE ATT&CK technique. Measured shape:
 // {id, name, display_name} — e.g. T1041 / "Exfiltration Over C2 Channel".
 type AttackID struct {
 	ID          string `json:"id"`
 	Name        string `json:"name"`
 	DisplayName string `json:"display_name"`
+}
+
+// UnmarshalJSON accepts either the object form or a bare technique id, for the
+// same reason as NamedRef.
+func (a *AttackID) UnmarshalJSON(b []byte) error {
+	if s, ok, err := decodeBareString(b); ok {
+		a.ID = s
+		return err
+	}
+	type plain AttackID
+	var p plain
+	if err := json.Unmarshal(b, &p); err != nil {
+		return err
+	}
+	*a = AttackID(p)
+	return nil
+}
+
+func decodeBareString(b []byte) (string, bool, error) {
+	trimmed := bytes.TrimSpace(b)
+	if len(trimmed) == 0 || trimmed[0] != '"' {
+		return "", false, nil
+	}
+	var s string
+	err := json.Unmarshal(trimmed, &s)
+	return s, true, err
+}
+
+// PulseDetail is GET /pulses/{id}.
+//
+// It embeds an `indicators` array and answers anonymously, which is what makes
+// pivoting from a pulse to its other indicators possible without an API key.
+// The catch is that the response carries no total and no pagination cursor, so
+// the embedded set cannot be assumed complete — see engine.PulseResult.
+type PulseDetail struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Author      Author `json:"author"`
+	AuthorName  string `json:"author_name"`
+	Created     string `json:"created"`
+	Modified    string `json:"modified"`
+	TLP         string `json:"TLP"`
+	Public      int    `json:"public"`
+	Revision    int    `json:"revision"`
+
+	Adversary         string     `json:"adversary"`
+	MalwareFamilies   []NamedRef `json:"malware_families"`
+	AttackIDs         []AttackID `json:"attack_ids"`
+	Industries        []string   `json:"industries"`
+	TargetedCountries []string   `json:"targeted_countries"`
+	Tags              []string   `json:"tags"`
+	References        []string   `json:"references"`
+
+	Indicators []PulseIndicator `json:"indicators"`
+
+	Raw json.RawMessage `json:"-"`
+}
+
+// CreatedAt and ModifiedAt parse the detail timestamps.
+func (p PulseDetail) CreatedAt() (time.Time, bool)  { return ParseTime(p.Created) }
+func (p PulseDetail) ModifiedAt() (time.Time, bool) { return ParseTime(p.Modified) }
+
+// PulseIndicator is one indicator carried by a pulse. Measured shape:
+// {content, created, description, expiration, id, indicator, is_active, title,
+// type}, where id is a number, is_active is 0/1, and expiration may be null.
+// Note that `created` here has no fractional seconds ("2025-12-03T20:00:02"),
+// unlike the pulse timestamps.
+type PulseIndicator struct {
+	ID          int64   `json:"id"`
+	Indicator   string  `json:"indicator"`
+	Type        string  `json:"type"`
+	Created     string  `json:"created"`
+	Title       string  `json:"title"`
+	Description string  `json:"description"`
+	Content     string  `json:"content"`
+	IsActive    int     `json:"is_active"`
+	Expiration  *string `json:"expiration"`
+}
+
+// Active reports whether the indicator is still marked live by its pulse.
+func (p PulseIndicator) Active() bool { return p.IsActive != 0 }
+
+// IndicatorPage is GET /pulses/{id}/indicators — the paginated view, which
+// requires an API key.
+//
+// UNVERIFIED against the live API: the endpoint returns 403 without a key, so
+// this shape comes from the published documentation rather than measurement.
+// Everything else in this package was measured. Treat it accordingly.
+type IndicatorPage struct {
+	Count    int              `json:"count"`
+	Next     *string          `json:"next"`
+	Previous *string          `json:"previous"`
+	Results  []PulseIndicator `json:"results"`
+
+	Raw json.RawMessage `json:"-"`
+}
+
+// SearchResults is GET /search/pulses, which also requires an API key.
+//
+// UNVERIFIED against the live API, for the same reason as IndicatorPage.
+type SearchResults struct {
+	Count    int     `json:"count"`
+	Next     *string `json:"next"`
+	Previous *string `json:"previous"`
+	Results  []Pulse `json:"results"`
+
+	Raw json.RawMessage `json:"-"`
 }
 
 // Label prefers the display name, then "id - name", then the id.

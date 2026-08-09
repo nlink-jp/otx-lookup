@@ -32,7 +32,7 @@ otx-lookup lookup 203.0.113.10 --sections reputation,passive_dns
 # against your OTX account
 otx-lookup lookup 203.0.113.10 --anonymous
 
-# Read a pulse, then pivot to the indicators it carries (needs an API key)
+# Read a pulse, then pivot to the indicators it carries — no API key needed
 otx-lookup pulse 693096c1cabeccbc6b3a5def
 otx-lookup pulse 693096c1cabeccbc6b3a5def --indicators
 
@@ -149,9 +149,18 @@ A free account at [otx.alienvault.com](https://otx.alienvault.com/) issues one k
 |---|---|---|
 | Indicator sections (all types) | yes | yes |
 | Pulse detail, related pulses | yes | yes |
-| Indicator list inside a pulse | no | yes |
+| The indicators a pulse carries | yes — the detail embeds them | yes, **plus the exact total** |
 | Pulse search | no | yes |
 | Rate ceiling | 1,000 req/h | 10,000 req/h |
+
+**The pivot works without a key**, which is the part worth knowing: the pulse detail response embeds the pulse's indicators, so `pulse <id> --indicators` returns them anonymously. What the detail does *not* carry is a total — no count, no pagination cursor — so an embedded set that stopped early is indistinguishable from a complete one. `otx-lookup` says so rather than guessing:
+
+```
+indicators: 4 returned; the total is unknown — the pulse detail reports none,
+            and the endpoint that does needs an API key
+```
+
+With a key the paginated endpoint answers instead, and the count becomes exact (`indicators: 4 of 4090`).
 
 A query sent with a key is recorded against your OTX account. `--anonymous` skips the key deliberately for the lookups that do not need it.
 

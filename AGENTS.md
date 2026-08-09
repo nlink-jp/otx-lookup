@@ -118,6 +118,20 @@ trusting any of them a year from now.
   are identical in the data and opposite in meaning. `Result.Incomplete` and
   `EmptyButUnverified` exist for exactly this, the CLI prints `INCONCLUSIVE`,
   and the run exits non-zero. Do not weaken this.
+- **The pulse detail embeds the pulse's indicators, and answers anonymously.**
+  `GET /pulses/{id}` returns an `indicators` array of
+  `{id, indicator, type, created, title, description, content, is_active,
+  expiration}` — numeric id, `is_active` 0/1, `expiration` nullable, and the
+  indicator timestamps carry **no fractional seconds** while the pulse's own do.
+  This is what makes the campaign pivot work without an API key.
+  **But the detail reports no total** — no count, no cursor — so an embedded set
+  that stopped early is indistinguishable from a complete one. Hence
+  `IndicatorsHeld: -1` / `IndicatorsExact: false` unless the paginated
+  key-only endpoint answered. Never print a total the endpoint did not give.
+- **The pulse detail is slow, and fails outright for very large pulses.** A
+  pulse with ~335,000 indicators timed out; `/pulses/{id}/related` returned a
+  504 HTML page. Ordinary development traffic also drew 429s and 500s. Assume
+  this endpoint is unreliable and keep the fallbacks.
 - **No rate-budget header comes back.** The only OTX-specific response header
   observed is `X-OTX-ACTIVE`. `rdns-lookup` paces on
   `x-ratelimit-remaining`; that option does not exist here, so pacing must be
@@ -167,15 +181,19 @@ trusting any of them a year from now.
 
 ## Status
 
-Phase 1 (core) complete and verified against the live API: `internal/indicator`,
-`internal/config`, `internal/cache`, `internal/otx`, `internal/engine`, and the
-`lookup` command. Coverage 77–95% across the six implemented packages; the
-offline suite never touches the network or the developer's real config.
+Phases 1 and 2 complete. Every package is implemented and tested: coverage
+77–96%, and the offline suite never touches the network or the developer's real
+config. `lookup`, `pulse`, `cache` and the MCP server have been exercised
+against the live API, including a full stdio MCP session driven through the
+built binary.
 
-`pulse`, `search`, `cache` and `mcp` are dispatched but not implemented and exit
-2 saying so. `internal/workspace` and `internal/mcp` hold documentation only.
+**Not verified live: `search_pulses` and the paginated
+`/pulses/{id}/indicators`.** Both return 403 without an API key, and no key was
+available, so their response shapes come from the published documentation and
+are tested only against stubs — the `otx.SearchResults` and `otx.IndicatorPage`
+doc comments say so. Everything else in this repository was measured. Set
+`OTX_LOOKUP_API_KEY` and re-run `make e2e` to close that gap.
 
-Next: Phase 2 of the development plan — the `pulse`, `search` and `cache`
-commands, and the MCP server. Design record:
+Next: Phase 3 — the live e2e suite, then release. Design record:
 [docs/ja/otx-lookup-rfp.ja.md](docs/ja/otx-lookup-rfp.ja.md) (primary),
 [docs/en/otx-lookup-rfp.md](docs/en/otx-lookup-rfp.md).
