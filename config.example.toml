@@ -1,0 +1,73 @@
+# otx-lookup configuration — copy to ~/.config/otx-lookup/config.toml
+#
+# Every setting is optional; the values shown are the built-in defaults.
+# Precedence is: flag > environment variable > this file > built-in default.
+#
+# This file can hold a credential. Keep it out of version control (the
+# repository .gitignore already excludes config.toml) and readable only by
+# you — the key carries your whole OTX account's authority, since OTX has
+# no scope mechanism.
+
+[api]
+# OTX API key, from the account settings at https://otx.alienvault.com/.
+# The OTX_LOOKUP_API_KEY environment variable overrides this value, and
+# OTX_API_KEY is also accepted — that is the variable the official OTX SDKs
+# conventionally use, so an environment already set up for them works here.
+#
+# The key is OPTIONAL. Without it, every indicator section plus the pulse
+# detail and its related list still answer. A key adds three things: the
+# indicator list inside a pulse, pulse search, and a rate ceiling of
+# 10,000 req/h instead of 1,000.
+#
+# Note that a query sent with a key is recorded against your OTX account.
+# Pass --anonymous to deliberately query without it.
+#key = "YOUR-OTX-API-KEY-HERE"
+
+# API root. Override only to point at a mirror or a test server. The host is
+# expected to move as the LevelBlue rebrand proceeds, which is why this is
+# configurable rather than compiled in.
+# The OTX_LOOKUP_BASE_URL environment variable overrides this value.
+# base_url = "https://otx.alienvault.com/api/v1"
+
+[query]
+# Pulses listed for an indicator before the rest are summarised. Ten is
+# enough to see whether an indicator belongs to one campaign or to many.
+# The OTX_LOOKUP_DEFAULT_LIMIT environment variable overrides this value.
+# default_limit = 10
+
+[cache]
+# How long a cached answer stays fresh. Pulses are edited rarely and a triage
+# tends to revisit the same indicator several times in a session, so a day
+# keeps repeated lookups down to a single request.
+# The OTX_LOOKUP_CACHE_TTL_HOURS environment variable overrides this value.
+# ttl_hours = 24
+
+# Cache directory. Defaults to $XDG_CACHE_HOME/otx-lookup, else
+# ~/.cache/otx-lookup.
+# The OTX_LOOKUP_CACHE_DIR environment variable overrides this value.
+# dir = "~/.cache/otx-lookup"
+
+[network]
+# Timeout per HTTPS exchange.
+# The OTX_LOOKUP_TIMEOUT_SECONDS environment variable overrides this value.
+# timeout_seconds = 30
+
+[ratelimit]
+# Requests per hour this tool will spend before pausing. OTX publishes a
+# ceiling of 1,000/h anonymous and 10,000/h with a key, but returns no
+# remaining-budget header — so unlike rdns-lookup, which paces on what
+# upstream reports, the budget here has to be counted locally.
+# The OTX_LOOKUP_MAX_PER_HOUR environment variable overrides this value.
+# max_per_hour = 0   # 0 = use the ceiling implied by whether a key is set
+
+[mcp]
+# Records an MCP tool returns inline before writing them to a file instead.
+# An agent's context is scarcer than disk, and a pulse's indicator list runs
+# to thousands of entries.
+# The OTX_LOOKUP_MCP_INLINE_MAX environment variable overrides this value.
+# inline_max_records = 200
+
+# Default directory for file-mediated MCP results, used when a tool call does
+# not pass workspace_root. With neither set, large results are capped inline.
+# The OTX_LOOKUP_WORKSPACE environment variable overrides this value.
+# workspace = "~/.cache/otx-lookup/workspace"
