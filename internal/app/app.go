@@ -21,21 +21,22 @@ const (
 
 // Run dispatches a subcommand and returns a process exit code.
 func Run(args []string, version string) int {
-	return run(args, version, os.Stdout, os.Stderr)
+	return run(args, version, os.Stdin, os.Stdout, os.Stderr)
 }
 
-// run is Run with injected streams, so dispatch and the version banner can be
-// tested without capturing the process's own stdout.
-func run(args []string, version string, stdout, stderr io.Writer) int {
+// run is Run with injected streams, so dispatch, the version banner and the
+// lookup output can be tested without touching the process's own stdio.
+func run(args []string, version string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
 		usage(stderr)
 		return exitError
 	}
 	cmd, rest := args[0], args[1:]
 	switch cmd {
-	case "lookup", "pulse", "search", "cache", "mcp":
-		_ = rest
-		fmt.Fprintf(stderr, "otx-lookup: %s is not implemented yet (scaffold)\n", cmd)
+	case "lookup":
+		return runLookup(rest, version, stdin, stdout, stderr)
+	case "pulse", "search", "cache", "mcp":
+		fmt.Fprintf(stderr, "otx-lookup: %s is not implemented yet\n", cmd)
 		return exitError
 	case "version", "--version", "-v":
 		printVersion(stdout, version)

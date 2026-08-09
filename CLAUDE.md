@@ -70,6 +70,15 @@ the engine's clock and sleep injected) so tests are deterministic and offline.
   (`example.com` returns 50). Always report what upstream holds next to what
   was retrieved. This is the `rdns-lookup` honesty principle and it is not
   optional here.
+- **A name is asked as both `domain` and `hostname`.** OTX indexes a name's
+  pulses under exactly one of the two and answers 200 either way, so a wrong
+  guess reports zero pulses and looks exactly like a clean indicator. The
+  label count only orders the attempts; the fallback is what makes it correct.
+- **An empty answer built on a failed lookup is never reported as clean.** If
+  one type could not be queried, `Result.Incomplete` is set, the CLI prints
+  `INCONCLUSIVE`, and the exit code is non-zero. A transient 429 turning into
+  "nothing reported this indicator" is the single worst way this tool can be
+  wrong — it already happened once, in a live run, before the guard existed.
 - **No verdicts.** Pulses are community submissions of varying quality. Surface
   the author, vote counts, `false_positive` and `validation` as evidence; never
   compute "malicious" or "benign". Analysis belongs to the calling agent or
@@ -92,10 +101,10 @@ the engine's clock and sleep injected) so tests are deterministic and offline.
 
 ## Status
 
-Phase 2 (scaffolding) complete: structure, Makefile, vendored release scripts,
-CLI dispatch, and the `--version` parity test. The subcommands are dispatched
-but not implemented and exit 2 saying so. Phase 1 of the development plan
-(indicator classification, OTX client, engine, `lookup`) is next. Design:
+Phase 1 (core) complete and verified against the live API: indicator
+classification, config, cache, the OTX client, the engine, and `lookup`.
+`pulse`, `search`, `cache` and `mcp` are dispatched but not implemented and exit
+2 saying so; that is Phase 2. Design:
 [docs/ja/otx-lookup-rfp.ja.md](docs/ja/otx-lookup-rfp.ja.md).
 
 ## Communication Language

@@ -65,6 +65,30 @@ OTX carries sections that overlap four sibling tools. Showing them by default wo
 
 What OTX alone provides — the pulse and everything hanging off it — is what you get by default.
 
+### Why a domain is sometimes looked up twice
+
+OTX has two types for names, `domain` and `hostname`, and it indexes a name's
+pulses under exactly one of them — but **both endpoints answer `200` either
+way**, so asking the wrong one reports zero pulses and looks exactly like a
+clean indicator:
+
+| Name | as `domain` | as `hostname` |
+|---|---|---|
+| `paypal.com` | 50 pulses | 0 |
+| `bbc.co.uk` | 22 pulses | 0 |
+| `www.bbc.co.uk` | 0 | 50 pulses |
+
+The distinction is registrable-domain versus name-with-a-subdomain, which
+counting labels cannot settle (`bbc.co.uk` has three labels and is a domain;
+`mail.google.com` has three and is a hostname). So the shape only decides which
+to ask first, and the other is asked when the first finds nothing. Which one
+answered is printed with the result:
+
+```
+bbc.co.uk  [domain]  22 pulses held, 1 shown  CAPPED
+  resolved: asked as hostname, then domain; domain answered
+```
+
 ### Exit codes
 
 | Code | Meaning |
@@ -72,6 +96,11 @@ What OTX alone provides — the pulse and everything hanging off it — is what 
 | 0 | Every target was looked up (zero pulses is a valid answer) |
 | 1 | An upstream failure prevented some lookups (what succeeded is printed) |
 | 2 | Error — invalid input, bad configuration |
+
+**An empty result is only reported as clean when every lookup succeeded.** If
+one of them failed, the result is marked `INCONCLUSIVE` and the exit code is 1 —
+"nothing reported this indicator" and "we could not ask" are identical in the
+data and opposite in meaning, so they are never printed the same way.
 
 ## MCP server
 

@@ -8,6 +8,30 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `lookup <indicator>` — campaign context for an indicator from OTX community
+  pulses: adversaries, malware families, ATT&CK techniques, targeted industries
+  and countries, and tags, each with the number of pulses that named it, plus
+  the reporting window and the pulses themselves newest first. The type is
+  detected from the indicator's shape (IPv4, IPv6, domain, hostname, URL, MD5 /
+  SHA1 / SHA256, CVE) and validated before any network I/O.
+- Flags: `--sections`, `--limit`, `--anonymous`, `--json` / `-j`, `--refresh`,
+  `--timeout`, `--input`, `-c` / `--config`. Bulk input from arguments, a file,
+  or stdin; JSONL when there is more than one target.
+- Only `general` is fetched by default — it is where `pulse_info` lives. The
+  sections a sibling tool owns (`reputation`, `passive_dns`, `malware` /
+  `analysis`, `url_list`) are opt-in through `--sections`.
+- A name is looked up as both `domain` and `hostname` when the first finds
+  nothing, and the result states which answered. OTX indexes a name's pulses
+  under exactly one of the two but answers `200` either way, so without the
+  second attempt a wrong guess is indistinguishable from a clean indicator.
+- An empty result is reported as clean only when every lookup succeeded. If one
+  failed, the result is marked `INCONCLUSIVE`, the failure is named, and the
+  exit code is 1.
+- Local request pacing against the published hourly ceiling (1,000 anonymous /
+  10,000 with a key), since OTX returns no remaining-budget header.
+- TTL result cache with atomic writes, scoped so keyed and anonymous answers
+  never share an entry.
+
 - Project scaffold: module `github.com/nlink-jp/otx-lookup`, `main.go` at the
   repository root, the `internal/` package skeleton (`indicator`, `otx`,
   `engine`, `cache`, `config`, `workspace`, `app`, `mcp`), the `e2e` package
@@ -23,12 +47,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Design record: [docs/ja/otx-lookup-rfp.ja.md](docs/ja/otx-lookup-rfp.ja.md)
   (primary) and [docs/en/otx-lookup-rfp.md](docs/en/otx-lookup-rfp.md).
 
+### Fixed
+
+- Flags placed after a target were silently ignored. Go's `flag` package stops
+  parsing at the first positional argument, so `lookup paypal.com --limit 3`
+  read the flag as two more targets and dropped the limit. Found by a live run,
+  not by a test.
+
 ### Internal
 
-- The subcommands are dispatched but not yet implemented; they exit 2 saying
-  so. `internal/` holds package documentation and no logic — the observed
-  upstream behaviour each package must account for is recorded in its
-  `doc.go` so the constraint is present where the code will be written.
+- `pulse`, `search`, `cache` and `mcp` are dispatched but not yet implemented;
+  they exit 2 saying so.
+- The upstream behaviour each package must account for is recorded in its
+  `doc.go` and in AGENTS.md, measured against the live API rather than taken
+  from the documentation.
 
 ## [0.1.0]
 

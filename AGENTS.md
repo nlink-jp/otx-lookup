@@ -93,11 +93,48 @@ docs/{en,ja}/                RFP (the design record)
 These were measured against the live API on 2026-08-09. Re-verify before
 trusting any of them a year from now.
 
+- **`domain` and `hostname` are not interchangeable, and picking wrong fails
+  silently.** OTX indexes a name's pulses under exactly one of them, but both
+  endpoints answer `200` with a well-formed body either way — the wrong one
+  simply reports zero pulses. Measured:
+
+  | Name | `domain` | `hostname` |
+  |---|---|---|
+  | `paypal.com` | 50 pulses | 0 |
+  | `bbc.co.uk` | 22 pulses | 0 |
+  | `www.bbc.co.uk` | 0 | 50 pulses |
+  | `mail.google.com` | 0 | 50 pulses |
+
+  The distinction is registrable-domain versus name-with-a-subdomain — a
+  public-suffix question, not a label count (`bbc.co.uk` has three labels and
+  is a domain; `mail.google.com` has three and is a hostname). A bundled
+  suffix list would rot, so the label count only *orders* the attempts and
+  `engine.Lookup` asks the alternate whenever the first returns nothing.
+  `gov.uk` — a public suffix — returns `400` from both.
+- **An errored type must never be laundered into a clean answer.** This was a
+  real defect, caught by a live run: `domain` returned 429 while `hostname`
+  answered with zero pulses, and the result read "no community report names
+  this indicator" and exited 0. "Nothing reported this" and "we could not ask"
+  are identical in the data and opposite in meaning. `Result.Incomplete` and
+  `EmptyButUnverified` exist for exactly this, the CLI prints `INCONCLUSIVE`,
+  and the run exits non-zero. Do not weaken this.
 - **No rate-budget header comes back.** The only OTX-specific response header
   observed is `X-OTX-ACTIVE`. `rdns-lookup` paces on
   `x-ratelimit-remaining`; that option does not exist here, so pacing must be
   counted client-side against the published ceiling (1,000 req/h anonymous,
-  10,000 req/h with a key).
+  10,000 req/h with a key). Sustained probing does hit the ceiling: the 429
+  above was produced by ordinary development traffic.
+- **Flags must be parsed interleaved with targets.** Go's `flag` package stops
+  at the first positional, so a plain `fs.Parse` reads
+  `lookup paypal.com --limit 3` as three targets and silently drops the limit.
+  `parseInterleaved` parses in rounds instead. This was also caught by a live
+  run, not by a unit test.
+- **The echoed `type` is not the path type.** A SHA256 lookup under
+  `file/<hash>` comes back with `"type": "sha256"`. Never use the response's
+  own `type` to decide which endpoint answered.
+- **A CVE's `general` has a different top-level shape entirely** (`cvss`,
+  `epss`, `exploits`, `products`, `configurations`), which is why only the
+  common fields are decoded and the whole body is kept raw.
 - **`pulse_info.count` can be a page size, not a total.** `example.com`,
   `www.example.com`, a WannaCry hash and `CVE-2021-44228` all returned exactly
   50 — a suspiciously round number that shows up whenever there are many
@@ -130,14 +167,15 @@ trusting any of them a year from now.
 
 ## Status
 
-Phase 2 (scaffolding) complete: repository structure, Makefile with `build` →
-`dist/`, vendored signing and tap-generation scripts, CLI dispatch, and the
-`--version` / `version` parity test. The subcommands are dispatched but not
-implemented and exit 2 saying so — `internal/` currently holds package
-documentation and no logic, with the measured upstream constraints recorded in
-each `doc.go` so they are present where the code will be written.
+Phase 1 (core) complete and verified against the live API: `internal/indicator`,
+`internal/config`, `internal/cache`, `internal/otx`, `internal/engine`, and the
+`lookup` command. Coverage 77–95% across the six implemented packages; the
+offline suite never touches the network or the developer's real config.
 
-Next: Phase 1 of the development plan — `internal/indicator`, `internal/otx`,
-`internal/engine`, and the `lookup` command with its tests. Design record:
+`pulse`, `search`, `cache` and `mcp` are dispatched but not implemented and exit
+2 saying so. `internal/workspace` and `internal/mcp` hold documentation only.
+
+Next: Phase 2 of the development plan — the `pulse`, `search` and `cache`
+commands, and the MCP server. Design record:
 [docs/ja/otx-lookup-rfp.ja.md](docs/ja/otx-lookup-rfp.ja.md) (primary),
 [docs/en/otx-lookup-rfp.md](docs/en/otx-lookup-rfp.md).

@@ -13,7 +13,7 @@ func TestVersionSpellingsAreIdentical(t *testing.T) {
 	outputs := make(map[string]string)
 	for _, arg := range []string{"version", "--version", "-v"} {
 		var stdout, stderr bytes.Buffer
-		if code := run([]string{arg}, "1.2.3", &stdout, &stderr); code != exitOK {
+		if code := run([]string{arg}, "1.2.3", nil, &stdout, &stderr); code != exitOK {
 			t.Fatalf("%s: exit code = %d, want %d (stderr: %s)", arg, code, exitOK, stderr.String())
 		}
 		if stderr.Len() != 0 {
@@ -35,7 +35,7 @@ func TestVersionSpellingsAreIdentical(t *testing.T) {
 func TestHelpGoesToStdoutAndSucceeds(t *testing.T) {
 	for _, arg := range []string{"help", "-h", "--help"} {
 		var stdout, stderr bytes.Buffer
-		if code := run([]string{arg}, "dev", &stdout, &stderr); code != exitOK {
+		if code := run([]string{arg}, "dev", nil, &stdout, &stderr); code != exitOK {
 			t.Errorf("%s: exit code = %d, want %d", arg, code, exitOK)
 		}
 		if stderr.Len() != 0 {
@@ -51,7 +51,7 @@ func TestHelpGoesToStdoutAndSucceeds(t *testing.T) {
 // piped stdout stays clean.
 func TestNoArgsIsUsageErrorOnStderr(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	if code := run(nil, "dev", &stdout, &stderr); code != exitError {
+	if code := run(nil, "dev", nil, &stdout, &stderr); code != exitError {
 		t.Errorf("exit code = %d, want %d", code, exitError)
 	}
 	if stdout.Len() != 0 {
@@ -64,7 +64,7 @@ func TestNoArgsIsUsageErrorOnStderr(t *testing.T) {
 
 func TestUnknownCommandIsUsageError(t *testing.T) {
 	var stdout, stderr bytes.Buffer
-	if code := run([]string{"whois"}, "dev", &stdout, &stderr); code != exitError {
+	if code := run([]string{"whois"}, "dev", nil, &stdout, &stderr); code != exitError {
 		t.Errorf("exit code = %d, want %d", code, exitError)
 	}
 	if !strings.Contains(stderr.String(), `unknown command "whois"`) {
@@ -78,7 +78,7 @@ func TestUnknownCommandIsUsageError(t *testing.T) {
 func TestUsageCommandsAreDispatched(t *testing.T) {
 	for _, cmd := range []string{"lookup", "pulse", "search", "cache", "mcp", "version", "help"} {
 		var stdout, stderr bytes.Buffer
-		run([]string{cmd}, "dev", &stdout, &stderr)
+		run([]string{cmd}, "dev", nil, &stdout, &stderr)
 		if strings.Contains(stderr.String(), "unknown command") {
 			t.Errorf("%s is documented in the usage text but not dispatched", cmd)
 		}
