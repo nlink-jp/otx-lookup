@@ -41,6 +41,8 @@ func run(args []string, version string, stdin io.Reader, stdout, stderr io.Write
 		return runSearch(rest, version, stdout, stderr)
 	case "cache":
 		return runCache(rest, stdout, stderr)
+	case "auth":
+		return runAuth(rest, version, stdout, stderr)
 	case "mcp":
 		return runMCP(rest, version, stdin, stdout, stderr)
 	case "version", "--version", "-v":
@@ -78,6 +80,7 @@ Commands:
   search <query>           Search pulses (needs an API key)
   cache status             Show the result-cache state
   cache clear              Clear the result cache
+  auth check               Verify that the configured API key actually works
   mcp                      Run as a local MCP server (stdio)
   version                  Print the version
 
@@ -127,5 +130,9 @@ key adds is the paginated indicator endpoint (the only one that reports how many
 indicators a pulse really holds), pulse search, and a higher rate ceiling. Note
 that queries made with a key are recorded against your OTX account — use
 --anonymous when that matters.
+
+A key with a typo in it fails silently: indicator lookups answer anonymously, so
+they still succeed and still report "authenticated", which only means a key was
+sent. Run "auth check" to find out whether the key actually works.
 `)
 }

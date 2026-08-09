@@ -44,6 +44,7 @@ internal/config/             Sectioned-TOML subset + OTX_LOOKUP_* / OTX_API_KEY 
 internal/engine/             Shared core: classify, cache, fetch, aggregate campaign context
 internal/workspace/          File-mediated MCP output, os.Root contained
 internal/app/                CLI shell: subcommand dispatch, flags, text/JSON rendering
+                             (auth.go holds `auth check`, the only key validator)
 internal/mcp/                Zero-dep stdio JSON-RPC 2.0 server + embedded usage.md
 e2e/                         Live tests behind the `e2e` build tag
 docs/{en,ja}/                RFP (the design record)
@@ -147,6 +148,16 @@ trusting any of them a year from now.
 - **Search results are sorted oldest-first by default.** A search for "qakbot"
   leads with 2015 reports. `sort=-modified` is requested explicitly; without it
   the feature is useless for triage.
+- **A bad API key is invisible to every command except `auth check`.** The
+  indicator endpoints answer anonymously, so a typo'd key still returns 200 and
+  the provenance line still says "authenticated" — which only ever meant "a key
+  was sent". `/users/me` is the sole endpoint that rejects one
+  (403 `{"detail":"Authentication required"}`), which is why `auth check`
+  exists at all.
+- **`member_since` is not a timestamp.** It is a rendered relative phrase —
+  `"3344 days ago "`, trailing space included. Pass it through; do not parse it.
+  Note also that `user_id` is a number here while the same identity inside a
+  pulse's author object is a string.
 - **Search results are a reduced pulse form** — no `indicator_count`,
   `subscriber_count` or vote counts, so those decode as zero. Never render a
   zero from a search result as a real count.

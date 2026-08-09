@@ -121,6 +121,28 @@ func (c *Client) Pulse(ctx context.Context, id string) (json.RawMessage, error) 
 	return c.get(ctx, "/pulses/"+url.PathEscape(id), nil)
 }
 
+// Account fetches the account the API key belongs to.
+//
+// This is the only way to tell a valid key from a typo. Every other endpoint
+// either ignores the key (the indicator sections answer anonymously, so a bad
+// key still returns 200) or needs one for reasons of its own — so a lookup
+// succeeding proves nothing about the key.
+func (c *Client) Account(ctx context.Context) (*Account, error) {
+	if !c.HasKey() {
+		return nil, errNeedsKey("checking the API key")
+	}
+	raw, err := c.get(ctx, "/users/me", nil)
+	if err != nil {
+		return nil, err
+	}
+	var a Account
+	if err := json.Unmarshal(raw, &a); err != nil {
+		return nil, &Error{Code: CodeDecode, Message: fmt.Sprintf("decode account: %v", err)}
+	}
+	a.Raw = raw
+	return &a, nil
+}
+
 // PulseDetail fetches and decodes a pulse. Answers anonymously, and the
 // response embeds an `indicators` array — which is what makes pivoting from a
 // pulse to its other indicators possible without a key.

@@ -31,8 +31,8 @@ func (c *commonFlags) register(fs *flag.FlagSet) {
 	fs.StringVar(&c.config, "c", "", "config file path (shorthand)")
 }
 
-// build resolves configuration and wires the engine.
-func (c *commonFlags) build(version string) (*config.Config, *engine.Engine, error) {
+// buildClient resolves configuration and wires the upstream client.
+func (c *commonFlags) buildClient(version string) (*config.Config, *otx.Client, error) {
 	cfg, err := config.Load(c.config, c.timeout)
 	if err != nil {
 		return nil, nil, err
@@ -40,7 +40,15 @@ func (c *commonFlags) build(version string) (*config.Config, *engine.Engine, err
 	if c.anonymous {
 		cfg = cfg.Anonymous()
 	}
-	client := otx.New(cfg.BaseURL, cfg.APIKey, cfg.Timeout, cfg.RateCeiling(), "otx-lookup/"+version)
+	return cfg, otx.New(cfg.BaseURL, cfg.APIKey, cfg.Timeout, cfg.RateCeiling(), "otx-lookup/"+version), nil
+}
+
+// build resolves configuration and wires the engine.
+func (c *commonFlags) build(version string) (*config.Config, *engine.Engine, error) {
+	cfg, client, err := c.buildClient(version)
+	if err != nil {
+		return nil, nil, err
+	}
 	return cfg, engine.New(cfg, &cache.Store{Dir: cfg.CacheDir}, client), nil
 }
 

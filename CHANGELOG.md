@@ -39,6 +39,14 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `search <query>` — pulse search. Requires an API key, and says so precisely
   without spending a request when there is none.
 - `cache status` and `cache clear`, with `--json`.
+- `auth check` — the only way to find out whether the configured API key
+  actually works. Indicator lookups answer anonymously, so a key with a typo in
+  it still lets them succeed and still reports "authenticated", which means only
+  that a key was sent; `/users/me` is the one endpoint that rejects a bad key.
+  It answers with four distinct states — `valid`, `rejected`, `unreachable`,
+  `absent` — because "we could not ask" is not "your key is bad", and exits 0
+  only for `valid`. With no key configured it answers locally without spending a
+  request.
 - `mcp` — a dependency-free stdio JSON-RPC 2.0 MCP server exposing
   `lookup_indicator`, `get_pulse`, `search_pulses`, `cache_status` and
   `get_usage`, with an embedded manual that meta-tests pin to the code: every

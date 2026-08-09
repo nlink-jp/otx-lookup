@@ -49,6 +49,9 @@ cut -d, -f2 alerts.csv | otx-lookup lookup --json
 # キャッシュ
 otx-lookup cache status
 otx-lookup cache clear
+
+# 設定したキーは実際に効いているか
+otx-lookup auth check
 ```
 
 ### 既定で出さない section と、その理由
@@ -159,6 +162,18 @@ indicators: 4 returned; the total is unknown — the pulse detail reports none,
 キーがあればページング対応の endpoint が答え、件数は正確になる（`indicators: 4 of 4090`）。
 
 キーを付けた照会は OTX アカウントに記録される。キーを必要としない照会について、意図的にキーを使わないのが `--anonymous` である。
+
+**打ち間違えたキーは黙って失敗する。** indicator 照会は匿名で通るので、キーが不正でも成功し、`authenticated` と表示される — これは「キーが送られた」しか意味しない。上流に問い合わせて確かめる唯一のコマンドが `auth check` である。
+
+```
+$ otx-lookup auth check
+API key: valid  (account analyst, id 1234567)
+  member since: 3344 days ago
+  rate ceiling: 10000 requests/hour
+  unlocks:      pulse search and the exact indicator total of a pulse
+```
+
+状態は `valid` / `rejected` / `unreachable` / `absent` の 4 値である。「訊けなかった」と「キーが悪い」は別物なので潰さない。exit 0 は `valid` のときだけなので、`otx-lookup auth check && ...` とスクリプトに書いて安全である。キー未設定のときはローカルで答え、リクエストを消費しない。
 
 ## 規約と帰属
 

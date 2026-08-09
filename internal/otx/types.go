@@ -189,6 +189,31 @@ func decodeBareString(b []byte) (string, bool, error) {
 	return s, true, err
 }
 
+// Account is GET /users/me — the only endpoint that answers "is this key
+// valid?". Measured 2026-08-10: {avatar_url, award_count, follower_count,
+// indicator_count, member_since, pulse_count, subscriber_count, user_id,
+// username}. A rejected key returns 403 with {"detail":"Authentication
+// required"}, so validity is unambiguous.
+//
+// Note that user_id is a number here while the same identity inside a pulse's
+// author object is a string. Do not share a type between the two.
+type Account struct {
+	Username string `json:"username"`
+	UserID   int64  `json:"user_id"`
+
+	// MemberSince is a rendered relative phrase — "3344 days ago" — not a
+	// timestamp, despite the name. Pass it through; do not try to parse it.
+	MemberSince string `json:"member_since"`
+
+	PulseCount      int `json:"pulse_count"`
+	IndicatorCount  int `json:"indicator_count"`
+	SubscriberCount int `json:"subscriber_count"`
+	FollowerCount   int `json:"follower_count"`
+	AwardCount      int `json:"award_count"`
+
+	Raw json.RawMessage `json:"-"`
+}
+
 // PulseDetail is GET /pulses/{id}.
 //
 // It embeds an `indicators` array and answers anonymously, which is what makes

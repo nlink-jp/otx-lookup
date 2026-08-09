@@ -50,6 +50,9 @@ cut -d, -f2 alerts.csv | otx-lookup lookup --json
 # Cache
 otx-lookup cache status
 otx-lookup cache clear
+
+# Is the configured key actually working?
+otx-lookup auth check
 ```
 
 ### Which sections are off by default, and why
@@ -163,6 +166,18 @@ indicators: 4 returned; the total is unknown — the pulse detail reports none,
 With a key the paginated endpoint answers instead, and the count becomes exact (`indicators: 4 of 4090`).
 
 A query sent with a key is recorded against your OTX account. `--anonymous` skips the key deliberately for the lookups that do not need it.
+
+**A key with a typo in it fails silently.** Indicator lookups answer anonymously, so they still succeed with a bad key — and still print `authenticated`, which only means a key was sent. `auth check` is the one command that asks upstream:
+
+```
+$ otx-lookup auth check
+API key: valid  (account analyst, id 1234567)
+  member since: 3344 days ago
+  rate ceiling: 10000 requests/hour
+  unlocks:      pulse search and the exact indicator total of a pulse
+```
+
+It distinguishes four states — `valid`, `rejected`, `unreachable` and `absent` — because "we could not ask" is not "your key is bad". Exit code 0 only for `valid`, so `otx-lookup auth check && ...` is safe to script on. With no key configured it answers locally and spends no request.
 
 ## Terms and attribution
 
