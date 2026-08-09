@@ -86,13 +86,13 @@ func TestPulseIndicatorsWorkWithoutAKey(t *testing.T) {
 	if !strings.Contains(out, "inactive") {
 		t.Errorf("is_active=0 was not surfaced:\n%s", out)
 	}
-	// And the count must be honest: the detail reports no total, so claiming
-	// one would be an invention.
-	if !strings.Contains(out, "the total is unknown") {
-		t.Errorf("an unknown total was not stated as unknown:\n%s", out)
+	// And the count must say where it came from: the detail states no total,
+	// so presenting one as upstream's would be an invention.
+	if !strings.Contains(out, "upstream states no total here") {
+		t.Errorf("the unconfirmed count was not qualified:\n%s", out)
 	}
-	if !strings.Contains(out, "needs an API key") {
-		t.Errorf("output does not say what would give an exact count:\n%s", out)
+	if !strings.Contains(out, "an API key confirms it") {
+		t.Errorf("output does not say what would confirm the count:\n%s", out)
 	}
 }
 

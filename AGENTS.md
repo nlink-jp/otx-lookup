@@ -128,10 +128,28 @@ trusting any of them a year from now.
   that stopped early is indistinguishable from a complete one. Hence
   `IndicatorsHeld: -1` / `IndicatorsExact: false` unless the paginated
   key-only endpoint answered. Never print a total the endpoint did not give.
-- **The pulse detail is slow, and fails outright for very large pulses.** A
-  pulse with ~335,000 indicators timed out; `/pulses/{id}/related` returned a
-  504 HTML page. Ordinary development traffic also drew 429s and 500s. Assume
-  this endpoint is unreliable and keep the fallbacks.
+- **The detail does not truncate — it fails.** Embedded count versus the
+  paginated endpoint's `count`, measured with a key: 30/30, 202/202,
+  **4090/4090**. So the embedded set is the complete set, up to the point where
+  the endpoint gives up: a pulse with ~335,000 indicators timed out entirely.
+  The failure mode at the top end is a dead request, not a silent short answer.
+  `IndicatorsExact` therefore means "upstream stated a total", not "the list
+  might be short" — word any message about it accordingly.
+- **The pulse detail is slow and flaky.** `/pulses/{id}/related` returned a 504
+  HTML page; ordinary development traffic drew 429s, 500s and outright
+  connection failures. Keep the fallbacks.
+- **`exact_match` in a search response is a string, not the documented
+  boolean.** Observed empty (`""`) on every query. Declaring it `bool` made the
+  entire search fail to decode, and that reached a live run — the field is now
+  kept as `json.RawMessage` and nothing depends on it. This is the concrete
+  reason the doc-derived shapes were flagged as unverified: one of them was
+  wrong.
+- **Search results are sorted oldest-first by default.** A search for "qakbot"
+  leads with 2015 reports. `sort=-modified` is requested explicitly; without it
+  the feature is useless for triage.
+- **Search results are a reduced pulse form** — no `indicator_count`,
+  `subscriber_count` or vote counts, so those decode as zero. Never render a
+  zero from a search result as a real count.
 - **No rate-budget header comes back.** The only OTX-specific response header
   observed is `X-OTX-ACTIVE`. `rdns-lookup` paces on
   `x-ratelimit-remaining`; that option does not exist here, so pacing must be
@@ -187,12 +205,11 @@ config. `lookup`, `pulse`, `cache` and the MCP server have been exercised
 against the live API, including a full stdio MCP session driven through the
 built binary.
 
-**Not verified live: `search_pulses` and the paginated
-`/pulses/{id}/indicators`.** Both return 403 without an API key, and no key was
-available, so their response shapes come from the published documentation and
-are tested only against stubs — the `otx.SearchResults` and `otx.IndicatorPage`
-doc comments say so. Everything else in this repository was measured. Set
-`OTX_LOOKUP_API_KEY` and re-run `make e2e` to close that gap.
+**Every endpoint has now been measured**, including the two that need an API
+key. That verification paid for itself twice: `exact_match` turned out to be a
+string rather than the documented boolean, which broke search entirely, and the
+default search sort turned out to be oldest-first, which made the feature
+useless for triage. Both are fixed and pinned by tests.
 
 Next: Phase 3 — the live e2e suite, then release. Design record:
 [docs/ja/otx-lookup-rfp.ja.md](docs/ja/otx-lookup-rfp.ja.md) (primary),

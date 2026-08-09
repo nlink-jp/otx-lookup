@@ -288,6 +288,25 @@ func TestPagingParameters(t *testing.T) {
 	}
 }
 
+// Upstream sorts search results oldest-first by default, which puts 2015
+// reports at the top of a "qakbot" search. Newest-first has to be requested.
+func TestSearchAsksForNewestFirst(t *testing.T) {
+	var gotSort string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotSort = r.URL.Query().Get("sort")
+		w.Write([]byte(`{"count":0,"results":[]}`))
+	}))
+	defer srv.Close()
+	c := New(srv.URL, "key", time.Second, 0, "ua")
+
+	if _, err := c.SearchPulses(context.Background(), "qakbot", 1, 10); err != nil {
+		t.Fatalf("SearchPulses: %v", err)
+	}
+	if gotSort != SearchSort {
+		t.Errorf("sort = %q, want %q — upstream's default is oldest-first", gotSort, SearchSort)
+	}
+}
+
 // OTX returns no rate-budget header, so the ceiling is enforced locally. With a
 // budget of two per window, the third request must wait for the first to age
 // out.

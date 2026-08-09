@@ -301,6 +301,28 @@ transformation CLIs and addresses a different audience.
 
 ---
 
+## Post-implementation corrections (2026-08-10)
+
+Implementation and live verification overturned three assumptions made while
+drafting. What follows is authoritative; the Discussion Log below is left as the
+record of what was believed at the time.
+
+1. **The pivot does not need an API key.** §2 describes the pulse indicator list
+   as key-only, but `GET /pulses/{id}` answers anonymously and its response
+   embeds an `indicators` array. Pivoting therefore works without a key. What a
+   key adds is the **exact total** (the paginated endpoint's `count`), search,
+   and the higher rate ceiling.
+2. **The detail does not truncate.** Embedded count and paginated `count` agreed
+   at 30, 202 and **4090** indicators. Past the endpoint's limit it times out
+   rather than shortening the list (measured on a pulse of ~335,000
+   indicators). So `IndicatorsExact: false` means "upstream stated no total",
+   not "the list may be short".
+3. **`exact_match` is a string, not the documented boolean.** Declaring it
+   `bool` made every search response fail to decode. The default search sort
+   also turned out to be oldest-first, which made the feature useless for triage
+   (`sort=-modified` is now requested explicitly). The concern recorded in §7 —
+   that the two key-only endpoints were unmeasured — was well founded.
+
 ## Discussion Log
 
 **2026-08-09**

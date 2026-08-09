@@ -116,7 +116,7 @@ func TestPulseIndicatorPageRequiresAKeyAndDecodes(t *testing.T) {
 }
 
 func TestSearchDecodes(t *testing.T) {
-	body := `{"count":2,"next":null,"previous":null,"results":[
+	body := `{"count":2,"exact_match":"","next":null,"previous":null,"results":[
 	  {"id":"s1","name":"One","modified":"2026-08-01T00:00:00.000000","author":{"username":"a"}},
 	  {"id":"s2","name":"Two","modified":"2026-07-01T00:00:00.000000","author":{"username":"b"}}]}`
 	srv := newKeyedServer(t, body)
@@ -134,6 +134,26 @@ func TestSearchDecodes(t *testing.T) {
 	}
 	if res.Results[0].Author.Username != "a" {
 		t.Errorf("author = %+v", res.Results[0].Author)
+	}
+}
+
+// exact_match is documented as a boolean and arrives as a string. Declaring it
+// bool made the entire search fail to decode, which reached a live run. Whatever
+// type it takes, search must keep working.
+func TestSearchSurvivesAnyExactMatchType(t *testing.T) {
+	for _, em := range []string{`""`, `"some pulse"`, `true`, `false`, `null`, `0`} {
+		body := `{"count":1,"exact_match":` + em + `,"next":null,"previous":null,"results":[{"id":"s1","name":"One"}]}`
+		srv := newKeyedServer(t, body)
+		c := New(srv, "k", time.Second, 0, "ua")
+
+		res, err := c.Search(context.Background(), "q", 1, 10)
+		if err != nil {
+			t.Errorf("exact_match=%s broke the search decode: %v", em, err)
+			continue
+		}
+		if res.Count != 1 || len(res.Results) != 1 {
+			t.Errorf("exact_match=%s: results = %+v", em, res)
+		}
 	}
 }
 

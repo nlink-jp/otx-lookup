@@ -184,12 +184,19 @@ func (c *Client) PulseIndicators(ctx context.Context, id string, page, limit int
 	return c.get(ctx, "/pulses/"+url.PathEscape(id)+"/indicators", q)
 }
 
+// SearchSort is the ordering asked for in a pulse search.
+//
+// Upstream's own default is oldest-first: searching "qakbot" leads with reports
+// from 2015, which is the least useful answer a triage could get. Newest-first
+// is requested explicitly.
+const SearchSort = "-modified"
+
 // SearchPulses searches pulses. Requires a key (measured: 403 without one).
 func (c *Client) SearchPulses(ctx context.Context, query string, page, limit int) (json.RawMessage, error) {
 	if !c.HasKey() {
 		return nil, errNeedsKey("pulse search")
 	}
-	q := url.Values{"q": {query}}
+	q := url.Values{"q": {query}, "sort": {SearchSort}}
 	setPaging(q, page, limit)
 	return c.get(ctx, "/search/pulses", q)
 }

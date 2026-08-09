@@ -39,9 +39,14 @@ type PulseResult struct {
 
 	Indicators []otx.PulseIndicator `json:"indicators,omitempty"`
 
-	// IndicatorsHeld is what upstream says the pulse contains, and is only
-	// known when the paginated endpoint answered — the detail response carries
-	// no total at all. -1 means "unknown".
+	// IndicatorsHeld is the total upstream states, which only the paginated
+	// endpoint reports; -1 means upstream never stated one. IndicatorsExact
+	// says whether that happened.
+	//
+	// A false IndicatorsExact is not a warning that the list is short. The
+	// detail endpoint was measured returning the complete set at 30, 202 and
+	// 4090 indicators — it simply never states a total, so confirming one
+	// needs an API key.
 	IndicatorsHeld  int  `json:"indicators_held"`
 	IndicatorsShown int  `json:"indicators_shown"`
 	IndicatorsExact bool `json:"indicators_exact"`

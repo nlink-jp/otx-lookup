@@ -228,7 +228,8 @@ func (p PulseDetail) ModifiedAt() (time.Time, bool) { return ParseTime(p.Modifie
 // {content, created, description, expiration, id, indicator, is_active, title,
 // type}, where id is a number, is_active is 0/1, and expiration may be null.
 // Note that `created` here has no fractional seconds ("2025-12-03T20:00:02"),
-// unlike the pulse timestamps.
+// unlike the pulse timestamps. The paginated endpoint adds `pulse_key`; the
+// copy embedded in a pulse detail does not carry it.
 type PulseIndicator struct {
 	ID          int64   `json:"id"`
 	Indicator   string  `json:"indicator"`
@@ -239,17 +240,22 @@ type PulseIndicator struct {
 	Content     string  `json:"content"`
 	IsActive    int     `json:"is_active"`
 	Expiration  *string `json:"expiration"`
+	PulseKey    string  `json:"pulse_key"`
 }
 
 // Active reports whether the indicator is still marked live by its pulse.
 func (p PulseIndicator) Active() bool { return p.IsActive != 0 }
 
 // IndicatorPage is GET /pulses/{id}/indicators — the paginated view, which
-// requires an API key.
+// requires an API key. Measured 2026-08-10: {count, next, previous, results},
+// with `next` a full URL rather than a cursor.
 //
-// UNVERIFIED against the live API: the endpoint returns 403 without a key, so
-// this shape comes from the published documentation rather than measurement.
-// Everything else in this package was measured. Treat it accordingly.
+// Its `count` is the only place upstream states how many indicators a pulse
+// holds. Measured against the detail endpoint at 30, 202 and 4090 indicators,
+// the two always agreed — the detail returns the complete set rather than a
+// page. It cannot be relied on beyond that: a pulse with ~335,000 indicators
+// made the detail time out entirely, so the failure mode at the top end is a
+// dead request, not a silent truncation.
 type IndicatorPage struct {
 	Count    int              `json:"count"`
 	Next     *string          `json:"next"`
@@ -260,13 +266,23 @@ type IndicatorPage struct {
 }
 
 // SearchResults is GET /search/pulses, which also requires an API key.
+// Measured 2026-08-10: {count, exact_match, next, previous, results}.
 //
-// UNVERIFIED against the live API, for the same reason as IndicatorPage.
+// The pulses in `results` are a reduced form: they carry the campaign metadata
+// but no indicator_count, subscriber_count or vote counts, so those fields
+// decode as zero. Do not present a zero from here as a real count.
+//
+// ExactMatch is deliberately left raw. It is documented as a boolean and
+// arrives as a string (empty in every observed response), and declaring it
+// `bool` made the whole search fail to decode — a defect that reached a live
+// run. Nothing depends on it; keeping it raw means a further change of type
+// cannot break search again.
 type SearchResults struct {
-	Count    int     `json:"count"`
-	Next     *string `json:"next"`
-	Previous *string `json:"previous"`
-	Results  []Pulse `json:"results"`
+	Count      int             `json:"count"`
+	ExactMatch json.RawMessage `json:"exact_match"`
+	Next       *string         `json:"next"`
+	Previous   *string         `json:"previous"`
+	Results    []Pulse         `json:"results"`
 
 	Raw json.RawMessage `json:"-"`
 }

@@ -66,6 +66,13 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- Pulse search failed to decode every response. `exact_match` is documented as
+  a boolean and arrives as a string; declaring it `bool` made the whole search
+  error out. It is now kept raw, and a test covers every type it could take.
+- Pulse search returned the oldest reports first — a search for "qakbot" led
+  with 2015. Newest-first is now requested explicitly.
+- Long pulse tag lists are capped in text output. One measured pulse carried
+  over 150 tags of scraped noise, which buried every other field.
 - Flags placed after a target were silently ignored. Go's `flag` package stops
   parsing at the first positional argument, so `lookup paypal.com --limit 3`
   read the flag as two more targets and dropped the limit. Found by a live run,
@@ -75,10 +82,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - The upstream behaviour each package must account for is recorded in its
   `doc.go` and in AGENTS.md, measured against the live API rather than taken
-  from the documentation. Two exceptions are marked as such in the code:
-  `search/pulses` and `pulses/{id}/indicators` return 403 without an API key,
-  so their shapes come from the published documentation and are tested against
-  stubs only.
+  from the documentation — including the two endpoints that need an API key.
 - The MCP server refuses a nil input stream instead of panicking.
 
 ## [0.1.0]

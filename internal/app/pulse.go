@@ -102,14 +102,15 @@ func renderPulse(w io.Writer, res *engine.PulseResult, hasKey, wantIndicators bo
 		return
 	}
 
-	// The count line is the honest part. The detail endpoint reports no total,
-	// so without a key the number shown is simply what came back — which may be
-	// a page. Saying "unknown" is the only truthful thing available.
+	// The count line says where the number came from. Only the paginated
+	// endpoint states a total, so without a key the figure is what the detail
+	// returned — which has been measured complete up to 4090 indicators, but
+	// is not confirmed by upstream.
 	if res.IndicatorsExact {
 		fmt.Fprintf(w, "  indicators: %d of %d\n", res.IndicatorsShown, res.IndicatorsHeld)
 	} else {
-		fmt.Fprintf(w, "  indicators: %d returned; the total is unknown — "+
-			"the pulse detail reports none%s\n", res.IndicatorsShown, keyHint(hasKey))
+		fmt.Fprintf(w, "  indicators: %d returned (upstream states no total here%s)\n",
+			res.IndicatorsShown, keyHint(hasKey))
 	}
 	for _, ind := range res.Indicators {
 		date := ""
@@ -127,9 +128,9 @@ func renderPulse(w io.Writer, res *engine.PulseResult, hasKey, wantIndicators bo
 
 func keyHint(hasKey bool) string {
 	if hasKey {
-		return " and the paginated endpoint did not answer"
+		return "; the endpoint that does did not answer"
 	}
-	return ", and the endpoint that does needs an API key"
+	return "; an API key confirms it"
 }
 
 func runSearch(args []string, version string, stdout, stderr io.Writer) int {
@@ -195,11 +196,24 @@ func runSearch(args []string, version string, stdout, stderr io.Writer) int {
 	return exitOK
 }
 
+// renderList prints a labelled list, capped. Pulses carry unbounded tag lists —
+// one measured pulse had over 200 tags of scraped noise — and a wall of them
+// buries the fields that matter.
 func renderList(w io.Writer, label string, values []string) {
 	if len(values) == 0 {
 		return
 	}
-	fmt.Fprintf(w, "  %-11s %s\n", label+":", strings.Join(values, ", "))
+	const max = 12
+	shown, extra := values, 0
+	if len(shown) > max {
+		extra = len(shown) - max
+		shown = shown[:max]
+	}
+	line := strings.Join(shown, ", ")
+	if extra > 0 {
+		line += fmt.Sprintf(", +%d more (see --json)", extra)
+	}
+	fmt.Fprintf(w, "  %-11s %s\n", label+":", line)
 }
 
 func nonEmpty(s string) []string {
