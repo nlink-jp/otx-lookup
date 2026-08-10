@@ -4,6 +4,27 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2026-08-10
+
+### Fixed
+
+- `lookup_indicator` could return a result no MCP client would accept. `limit`
+  caps the pulse list but bounds neither the aggregated `context` nor
+  `references`, so a live call on `CVE-2021-44228` with `limit: 3` produced a
+  162 KB result — 63 KB of it 1,705 tags, mostly scraped noise from feed-dump
+  pulses — and the client refused it outright. The tool was unusable for
+  precisely the indicators most worth looking at.
+
+  Each `context` category is now capped at its top 25 and `references` at 25.
+  The categories are ranked by how many pulses named each value, so what is
+  dropped is the least-corroborated tail. Nothing is dropped silently:
+  `context_omitted`, `references_omitted` and `note` account for it, and with a
+  `workspace_root` the complete result is written to `full_result_file`. A
+  result that needed no trimming carries none of those fields.
+
+  The CLI is unaffected — `--json` still emits everything, which is what a
+  pipeline wants.
+
 ## [0.1.0] - 2026-08-10
 
 ### Added

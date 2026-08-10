@@ -149,24 +149,125 @@ func (s *Server) lookupIndicator(ctx context.Context, raw json.RawMessage) (any,
 	if err != nil {
 		return nil, err
 	}
+	return s.trimLookup(res, a), nil
+}
+
+// contextTopN bounds each aggregate category in a tool result, and
+// referencesTopN bounds the reference list.
+//
+// `limit` caps the pulse list, but the aggregate and the references are
+// independent of it and unbounded: a live `lookup_indicator` on
+// CVE-2021-44228 with `limit: 3` produced a 162 KB result that no MCP client
+// would accept — 63 KB of it 1,705 tags, most of them scraped noise from
+// feed-dump pulses. The categories are ranked by how many pulses named each
+// value, so the tail is the least-corroborated part and the first thing that
+// should go. Every value dropped is counted, and with a workspace the complete
+// result is written to a file — the tool does not get to quietly shrink an
+// answer.
+const (
+	contextTopN    = 25
+	referencesTopN = 25
+)
+
+// lookupPayload is what lookup_indicator returns. It embeds the engine result
+// so the documented field names stay at the top level, and carries the
+// accounting for anything trimmed alongside them.
+type lookupPayload struct {
+	*engine.Result
+	ContextOmitted    map[string]int `json:"context_omitted,omitempty"`
+	ReferencesOmitted int            `json:"references_omitted,omitempty"`
+	PulsesFile        string         `json:"pulses_file,omitempty"`
+	PulsesInFile      int            `json:"pulses_in_file,omitempty"`
+	FullResultFile    string         `json:"full_result_file,omitempty"`
+	Note              string         `json:"note,omitempty"`
+}
+
+func (s *Server) trimLookup(res *engine.Result, a lookupArgs) *lookupPayload {
+	trimmed := *res
+	out := &lookupPayload{Result: &trimmed}
+
+	omitted := map[string]int{}
+	c := res.Context
+	c.Adversaries, omitted["adversaries"] = trimCounted(res.Context.Adversaries)
+	c.MalwareFamilies, omitted["malware_families"] = trimCounted(res.Context.MalwareFamilies)
+	c.AttackIDs, omitted["attack_ids"] = trimCounted(res.Context.AttackIDs)
+	c.Industries, omitted["industries"] = trimCounted(res.Context.Industries)
+	c.TargetedCountries, omitted["targeted_countries"] = trimCounted(res.Context.TargetedCountries)
+	c.Tags, omitted["tags"] = trimCounted(res.Context.Tags)
+	trimmed.Context = c
+	for k, n := range omitted {
+		if n == 0 {
+			delete(omitted, k)
+		}
+	}
+	if len(omitted) > 0 {
+		out.ContextOmitted = omitted
+	}
+
+	if len(res.References) > referencesTopN {
+		trimmed.References = res.References[:referencesTopN]
+		out.ReferencesOmitted = len(res.References) - referencesTopN
+	}
 
 	// A heavily-reported indicator carries dozens of pulses. Spilling them to a
 	// file keeps an agent's context for the analysis rather than the listing.
 	if len(res.Pulses) > s.inlineMax() {
-		path, werr := s.spill(a.WorkspaceRoot, "pulses-"+safeSlug(a.Indicator)+".jsonl", asRaw(res.Pulses))
-		if werr == nil {
-			trimmed := *res
+		if path, err := s.spill(a.WorkspaceRoot, "pulses-"+safeSlug(a.Indicator)+".jsonl", asRaw(res.Pulses)); err == nil {
 			trimmed.Pulses = res.Pulses[:s.inlineMax()]
-			return map[string]any{
-				"result":         trimmed,
-				"pulses_file":    path,
-				"pulses_in_file": len(res.Pulses),
-				"note": fmt.Sprintf("%d pulses were written to the file; the first %d are inline.",
-					len(res.Pulses), s.inlineMax()),
-			}, nil
+			out.PulsesFile = path
+			out.PulsesInFile = len(res.Pulses)
 		}
 	}
-	return res, nil
+
+	if out.ContextOmitted == nil && out.ReferencesOmitted == 0 && out.PulsesFile == "" {
+		return out
+	}
+
+	// Something was held back, so offer the complete answer as a file when
+	// there is anywhere to put it.
+	if path, err := s.spillJSON(a.WorkspaceRoot, "lookup-"+safeSlug(a.Indicator)+".json", res); err == nil {
+		out.FullResultFile = path
+	}
+	out.Note = trimNote(out)
+	return out
+}
+
+func trimNote(out *lookupPayload) string {
+	parts := make([]string, 0, 3)
+	if n := total(out.ContextOmitted); n > 0 {
+		parts = append(parts, fmt.Sprintf("%d aggregate values beyond the top %d per category were omitted "+
+			"(they are the least-corroborated, one or two pulses each)", n, contextTopN))
+	}
+	if out.ReferencesOmitted > 0 {
+		parts = append(parts, fmt.Sprintf("%d references were omitted", out.ReferencesOmitted))
+	}
+	if out.PulsesFile != "" {
+		parts = append(parts, fmt.Sprintf("%d pulses were written to pulses_file", out.PulsesInFile))
+	}
+	note := strings.Join(parts, "; ") + "."
+	if out.FullResultFile != "" {
+		note += " The complete result is in full_result_file."
+	} else {
+		note += " Pass workspace_root to receive the complete result as a file."
+	}
+	return note
+}
+
+func total(m map[string]int) int {
+	n := 0
+	for _, v := range m {
+		n += v
+	}
+	return n
+}
+
+// trimCounted keeps the top of an already-ranked category and reports how many
+// were dropped.
+func trimCounted(v []engine.Counted) ([]engine.Counted, int) {
+	if len(v) <= contextTopN {
+		return v, 0
+	}
+	return v[:contextTopN], len(v) - contextTopN
 }
 
 type pulseArgs struct {
@@ -257,18 +358,33 @@ func (s *Server) inlineMax() int {
 // configured one. It returns an error when neither is set, in which case the
 // caller keeps the result inline rather than losing it.
 func (s *Server) spill(root, name string, records []json.RawMessage) (string, error) {
-	if strings.TrimSpace(root) == "" && s.Cfg != nil {
-		root = s.Cfg.WorkspaceDir
-	}
-	if strings.TrimSpace(root) == "" {
-		return "", fmt.Errorf("no workspace_root given and none configured")
-	}
-	ws, err := workspace.Open(root)
+	ws, err := s.openWorkspace(root)
 	if err != nil {
 		return "", err
 	}
 	defer func() { _ = ws.Close() }()
 	return ws.WriteJSONL(name, records)
+}
+
+// spillJSON writes one complete document, for the case where the inline answer
+// had to be trimmed and the full one still has to be reachable.
+func (s *Server) spillJSON(root, name string, v any) (string, error) {
+	ws, err := s.openWorkspace(root)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = ws.Close() }()
+	return ws.WriteJSON(name, v)
+}
+
+func (s *Server) openWorkspace(root string) (*workspace.Workspace, error) {
+	if strings.TrimSpace(root) == "" && s.Cfg != nil {
+		root = s.Cfg.WorkspaceDir
+	}
+	if strings.TrimSpace(root) == "" {
+		return nil, fmt.Errorf("no workspace_root given and none configured")
+	}
+	return workspace.Open(root)
 }
 
 func asRaw[T any](items []T) []json.RawMessage {

@@ -145,6 +145,27 @@ Tool errors come back as `{"code": ..., "message": ...}` with `isError: true`.
 types have never been reported by anyone. That is a successful result — as long
 as `incomplete` is false.
 
+## What gets trimmed, and how you know
+
+`limit` caps the pulse list. It does **not** bound the aggregate or the
+references, which are independent of it — a lookup of a heavily-analysed CVE
+can otherwise return well over 100 KB, most of it scraped tags from feed-dump
+pulses. So `lookup_indicator` keeps the top 25 of each `context` category and
+the first 25 references.
+
+The categories are ranked by how many pulses named each value, so what is
+dropped is always the least-corroborated tail. Nothing is dropped silently:
+
+- `context_omitted` — a per-category count of what was left out, absent when
+  nothing was.
+- `references_omitted` — the same for references.
+- `full_result_file` — with a `workspace_root`, the complete untrimmed result
+  as JSON. Read it when the tail matters.
+- `note` — plain-language summary of all of the above.
+
+An untrimmed result carries none of these fields, so their presence is itself
+the signal that you are looking at a partial view.
+
 ## File-mediated results
 
 When a pulse list or indicator list exceeds the configured inline limit

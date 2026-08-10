@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -384,5 +386,134 @@ func TestServeRefusesANilInput(t *testing.T) {
 	var out bytes.Buffer
 	if err := s.Serve(context.Background(), nil, &out); err == nil {
 		t.Error("a nil input stream was accepted")
+	}
+}
+
+// A live `lookup_indicator` on CVE-2021-44228 with `limit: 3` returned 162 KB —
+// 63 KB of it 1,705 tags — and the MCP client refused the result outright. The
+// pulse list was correctly capped; the aggregate and the references were not
+// bounded by anything.
+func TestLargeAggregateIsTrimmedWithAccounting(t *testing.T) {
+	tags := make([]engine.Counted, 1705)
+	for i := range tags {
+		tags[i] = engine.Counted{Value: fmt.Sprintf("tag-%d", i), Pulses: 1}
+	}
+	refs := make([]string, 232)
+	for i := range refs {
+		refs[i] = fmt.Sprintf("https://example.test/report/%d", i)
+	}
+	s, _ := newServer(t, &stubEngine{lookup: &engine.Result{
+		Query: "CVE-2021-44228", Type: "cve", PulsesHeld: 50, PulsesShown: 3,
+		References: refs,
+		Context: engine.Context{
+			Tags:        tags,
+			Adversaries: []engine.Counted{{Value: "APT-X", Pulses: 4}},
+		},
+	}})
+
+	responses := converse(t, s,
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"lookup_indicator","arguments":{"indicator":"CVE-2021-44228","limit":3}}}`)
+	payload, isErr := toolPayload(t, responses[0])
+	if isErr {
+		t.Fatalf("call failed: %v", payload)
+	}
+
+	// The documented fields stay at the top level — trimming must not reshape
+	// the result an agent was taught to read.
+	if payload["pulses_held"].(float64) != 50 || payload["type"] != "cve" {
+		t.Errorf("the result shape changed: %v", payload)
+	}
+
+	ctx := payload["context"].(map[string]any)
+	if n := len(ctx["tags"].([]any)); n != contextTopN {
+		t.Errorf("tags = %d, want %d", n, contextTopN)
+	}
+	// A category that fits is left alone.
+	if n := len(ctx["adversaries"].([]any)); n != 1 {
+		t.Errorf("adversaries = %d, want 1 (nothing to trim)", n)
+	}
+	if n := len(payload["references"].([]any)); n != referencesTopN {
+		t.Errorf("references = %d, want %d", n, referencesTopN)
+	}
+
+	// Nothing may vanish silently.
+	omitted := payload["context_omitted"].(map[string]any)
+	if omitted["tags"].(float64) != float64(1705-contextTopN) {
+		t.Errorf("context_omitted.tags = %v", omitted["tags"])
+	}
+	if _, ok := omitted["adversaries"]; ok {
+		t.Error("a category that was not trimmed appears in context_omitted")
+	}
+	if payload["references_omitted"].(float64) != float64(232-referencesTopN) {
+		t.Errorf("references_omitted = %v", payload["references_omitted"])
+	}
+	if note, _ := payload["note"].(string); !strings.Contains(note, "omitted") {
+		t.Errorf("note does not explain the trimming: %q", note)
+	}
+
+	// And the whole point: the result now fits.
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(encoded) > 32*1024 {
+		t.Errorf("trimmed result is still %d bytes", len(encoded))
+	}
+}
+
+// A result that needs no trimming must carry none of the accounting fields.
+func TestSmallResultIsNotAnnotated(t *testing.T) {
+	s, _ := newServer(t, &stubEngine{lookup: &engine.Result{
+		Query: "quiet.test", Type: "domain",
+		Context: engine.Context{Tags: []engine.Counted{{Value: "c2", Pulses: 1}}},
+	}})
+	responses := converse(t, s,
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"lookup_indicator","arguments":{"indicator":"quiet.test"}}}`)
+	payload, _ := toolPayload(t, responses[0])
+
+	for _, k := range []string{"context_omitted", "references_omitted", "note", "full_result_file"} {
+		if _, ok := payload[k]; ok {
+			t.Errorf("an untrimmed result carries %q", k)
+		}
+	}
+}
+
+// With a workspace the complete answer is still reachable, so trimming costs
+// the caller nothing but a file read.
+func TestTrimmedResultIsWrittenInFull(t *testing.T) {
+	tags := make([]engine.Counted, 100)
+	for i := range tags {
+		tags[i] = engine.Counted{Value: fmt.Sprintf("tag-%d", i), Pulses: 1}
+	}
+	s, _ := newServer(t, &stubEngine{lookup: &engine.Result{
+		Query: "evil.test", Type: "domain", Context: engine.Context{Tags: tags},
+	}})
+	ws := t.TempDir()
+
+	responses := converse(t, s,
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"lookup_indicator","arguments":{"indicator":"evil.test","workspace_root":"`+ws+`"}}}`)
+	payload, _ := toolPayload(t, responses[0])
+
+	path, _ := payload["full_result_file"].(string)
+	if path == "" {
+		t.Fatalf("no full_result_file: %v", payload)
+	}
+	if !strings.HasPrefix(path, ws) {
+		t.Errorf("file %q written outside the workspace", path)
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read back: %v", err)
+	}
+	var full struct {
+		Context struct {
+			Tags []any `json:"tags"`
+		} `json:"context"`
+	}
+	if err := json.Unmarshal(b, &full); err != nil {
+		t.Fatalf("file is not valid JSON: %v", err)
+	}
+	if len(full.Context.Tags) != 100 {
+		t.Errorf("the file holds %d tags, want all 100", len(full.Context.Tags))
 	}
 }

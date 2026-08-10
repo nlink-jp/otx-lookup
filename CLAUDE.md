@@ -101,11 +101,17 @@ the engine's clock and sleep injected) so tests are deterministic and offline.
 
 ## Status
 
-Phases 1 and 2 complete: `lookup`, `pulse`, `search`, `cache` and the MCP
-server. Verified against the live API except `search_pulses` and the paginated
-pulse-indicator endpoint, which need an API key and are stub-tested only — see
-AGENTS.md. Next is Phase 3 (live e2e, release). Design:
-[docs/ja/otx-lookup-rfp.ja.md](docs/ja/otx-lookup-rfp.ja.md).
+Released and integrated. Every endpoint has been measured against the live API,
+and the tool runs as a registered MCP server. Design:
+[docs/ja/otx-lookup-rfp.ja.md](docs/ja/otx-lookup-rfp.ja.md) (RFP plus its
+post-implementation corrections); measured upstream behaviour is in AGENTS.md.
+
+**A tool result must fit in a client's response budget.** `limit` bounds the
+pulse list only — the aggregate and references are independent of it, and an
+untrimmed lookup of a heavily-analysed CVE reached 162 KB and was refused by the
+client. `internal/mcp` caps each ranked category and accounts for every value it
+drops. Do not remove that cap, and do not let a new field grow unbounded into a
+tool response.
 
 ## Communication Language
 
