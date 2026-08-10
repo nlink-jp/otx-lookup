@@ -13,6 +13,10 @@ otx-lookup は [LevelBlue Open Threat Exchange](https://otx.alienvault.com/) に
 ## インストール
 
 ```bash
+brew install nlink-jp/tap/otx-lookup   # ビルド済み・Developer ID 署名 + notarize 済み・arm64 macOS
+```
+
+```bash
 make build  # → dist/otx-lookup
 ```
 

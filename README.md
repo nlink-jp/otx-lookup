@@ -13,6 +13,10 @@ Because only a third-party index is read, **no packet reaches the target under i
 ## Install
 
 ```bash
+brew install nlink-jp/tap/otx-lookup   # prebuilt, Developer ID signed + notarized, arm64 macOS
+```
+
+```bash
 make build  # → dist/otx-lookup
 ```
 

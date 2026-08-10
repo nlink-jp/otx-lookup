@@ -4,7 +4,7 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.0] - 2026-08-10
 
 ### Added
 
@@ -102,9 +102,3 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   chosen for stability and never assert an exact pulse count.
 - `.golangci.yml` excluding only `fmt.Fprint*` to the CLI's own streams, so
   errcheck stays meaningful everywhere else. `make check` is green.
-
-## [0.1.0]
-
-Not yet assigned. Phase 1 of the development plan (indicator classification,
-the OTX client, the engine, and the `lookup` command) is the content of this
-release; see the RFP for the full plan.
