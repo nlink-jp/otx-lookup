@@ -118,10 +118,14 @@ rdns-lookup, malware-lookup and urlscan-lookup each own one of them, and
 duplicating them here would blur which tool's answer to trust. Ask for them
 explicitly with --sections when you want OTX's view as a second opinion.
 
-Pulses are community submissions of varying quality, so the author, the vote
-counts, the false-positive flag and the validation records are shown alongside
-them. This tool reports what was claimed; it never declares an indicator
-malicious or benign on its own.
+Pulses are community submissions of wildly uneven quality: a curated incident
+write-up and an automated blocklist of 300,000 indicators arrive in the same
+shape, and every field holds whatever its author typed — adversary names that
+are pasted paragraphs, tags that are file hashes, references that are empty.
+The count beside each aggregated value is how many independent pulses named it,
+which is the number to weigh. The author, the vote counts, the false-positive
+flag and the validation records are shown for the same reason. This tool reports
+what was claimed; it never declares an indicator malicious or benign on its own.
 
 An API key is optional. Without one, every indicator section and the pulse
 detail are still reachable — and the detail embeds the pulse's indicators, so

@@ -31,7 +31,15 @@ const instructions = `otx-lookup attaches campaign context to an indicator of co
 	`malware family, ATT&CK techniques, targeted industries and countries it was reported under, ` +
 	`by whom, and when. Call get_usage first — it returns the full reference, the result schema, ` +
 	`and the error-recovery table. Only a third-party index is read, so no packet reaches the ` +
-	`target under investigation. An indicator with no pulses is a normal result, not an error.`
+	`target under investigation. An indicator with no pulses is a normal result, not an error. ` +
+	`SOURCE QUALITY IS NOT UNIFORM, and this matters more than any other caveat here. Pulses are ` +
+	`submitted by anyone: a curated incident write-up and an automated blocklist of 300,000 ` +
+	`indicators arrive in the same shape, and every field holds whatever its author typed — ` +
+	`adversary names that are pasted paragraphs, tags that are file hashes or analysis prose, ` +
+	`references that are empty strings. Weigh the author, the vote counts and indicator_count ` +
+	`before believing any of it, treat what several independent pulses agree on as far stronger ` +
+	`than any single report, and never present a pulse hit as a malicious verdict — this server ` +
+	`returns claims, not conclusions.`
 
 func toolDefinitions() []map[string]any {
 	return []map[string]any{
@@ -40,7 +48,10 @@ func toolDefinitions() []map[string]any {
 			"description": "Campaign context for one indicator (IPv4, IPv6, domain, hostname, URL, " +
 				"MD5/SHA1/SHA256 hash, or CVE): the pulses that name it, plus aggregated adversaries, " +
 				"malware families, ATT&CK techniques, targeted industries and countries. Finding no " +
-				"pulses is a valid answer.",
+				"pulses is a valid answer. The pulses behind it are community submissions of uneven " +
+				"quality, so the aggregate mixes curated analysis with automated feed dumps and scraped " +
+				"noise: read the `pulses` count on each value as its corroboration, and never treat a " +
+				"hit as a verdict.",
 			"inputSchema": map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -65,7 +76,9 @@ func toolDefinitions() []map[string]any {
 			"name": ToolGetPulse,
 			"description": "One pulse in full, optionally with the indicators it carries — the pivot " +
 				"from a single indicator to the rest of a campaign. Works without an API key; a key " +
-				"additionally yields the exact indicator total.",
+				"additionally yields the exact indicator total. Judge the pulse before trusting what it " +
+				"carries: an `indicator_count` in the thousands means an automated feed dump rather than " +
+				"an analysis, and the author, description and references tell you which one you have.",
 			"inputSchema": map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -81,7 +94,7 @@ func toolDefinitions() []map[string]any {
 		},
 		{
 			"name":        ToolSearchPulses,
-			"description": "Search pulses by free text. Requires an OTX API key; without one this returns an auth_required error and spends no request.",
+			"description": "Search pulses by free text, newest first. Requires an OTX API key; without one this returns an auth_required error and spends no request. Results are whatever the community happened to name that way — a matching title is not evidence that the pulse concerns your case, or that it is any good.",
 			"inputSchema": map[string]any{
 				"type": "object",
 				"properties": map[string]any{

@@ -4,6 +4,26 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] - 2026-08-10
+
+### Changed
+
+- **The uneven quality of the source is now stated where an agent actually
+  reads.** A model can act on `tools/list` alone without ever calling
+  `get_usage`, and for this data source "who wrote this, and how much of it
+  should I believe" is the most consequential thing to know. The warning now
+  appears in the server instructions, in each pulse-derived tool's own
+  description, in the CLI help, and — with the field-level detail — in the
+  manual. A meta-test pins it in all four so it cannot be quietly dropped.
+
+  The manual now shows what was actually observed in a single lookup rather
+  than warning in the abstract: an `adversary` holding a pasted paragraph, a
+  `tag` holding an MD5, a `reference` holding an empty string, an `industries`
+  entry holding a comma-separated list as one value. The practical guidance is
+  concrete too — read the `pulses` count beside each aggregated value as its
+  corroboration, and use a pulse's `indicator_count` to tell an analysis from
+  an automated feed dump.
+
 ## [0.1.1] - 2026-08-10
 
 ### Fixed

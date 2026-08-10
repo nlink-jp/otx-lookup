@@ -14,11 +14,25 @@ and when.
 
 Two consequences for how you should use it:
 
-- **It reports claims, not verdicts.** Pulses are community submissions of
-  varying quality. The author, vote counts, upstream validation notes and
-  false-positive reports come back with every result so you can weigh them.
-  This server never decides that an indicator is malicious. Neither should you,
-  on this evidence alone.
+- **It reports claims, not verdicts, and the claims are of wildly uneven
+  quality.** Anyone can submit a pulse, and a curated incident write-up arrives
+  in exactly the same shape as an automated blocklist of 300,000 indicators.
+  Every field holds whatever its author typed. Actually observed in one lookup:
+
+  | Field | What was in it |
+  |---|---|
+  | `adversary` | a pasted paragraph of analysis, not an actor name |
+  | `tags` | an MD5 hash; elsewhere `"Imphash: … \| Imports (additional)"` |
+  | `references` | an empty string; elsewhere prose instead of a URL |
+  | `industries` | `"Legal, Financial, Healthcare, Government, …"` as one value |
+
+  So: read the `pulses` count on each aggregate value as its corroboration —
+  what five independent reports agree on is worth far more than what one says.
+  Check `indicator_count` on a pulse to tell an analysis from a feed dump.
+  Weigh the author, the vote counts, the upstream `validation` notes and
+  `false_positive_reports`, all of which come back with every result. This
+  server never decides that an indicator is malicious. Neither should you, on
+  this evidence alone.
 - **It duplicates no sibling.** `reputation`, `passive_dns`, `malware` /
   `analysis` and `url_list` are omitted by default because `abuse-lookup`,
   `rdns-lookup`, `malware-lookup` and `urlscan-lookup` each answer one of them

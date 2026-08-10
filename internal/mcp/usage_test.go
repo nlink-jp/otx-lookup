@@ -110,3 +110,59 @@ func TestRequiredArgumentsAreDeclared(t *testing.T) {
 		}
 	}
 }
+
+// The quality caveat has to survive in the places an agent actually reads.
+//
+// A model may act on `tools/list` alone without ever calling `get_usage`, and
+// for this data source "who wrote this and how much do I trust it" is the
+// single most consequential thing to know — a pulse hit is not a verdict. So it
+// is pinned in the server instructions, in the manual, and in the description
+// of every tool that returns pulse-derived content.
+func TestSourceQualityCaveatIsEverywhereAnAgentLooks(t *testing.T) {
+	if !strings.Contains(instructions, "SOURCE QUALITY IS NOT UNIFORM") {
+		t.Error("the server instructions do not warn that source quality varies")
+	}
+	if !strings.Contains(instructions, "claims, not conclusions") {
+		t.Error("the server instructions do not say the server returns claims rather than verdicts")
+	}
+
+	// Single words, not phrases: the manual is hard-wrapped, so a phrase test
+	// would fail on a reflow rather than on a change of meaning.
+	doc := UsageDoc()
+	for _, word := range []string{"uneven", "corroboration", "indicator_count", "verdicts"} {
+		if !strings.Contains(doc, word) {
+			t.Errorf("usage.md no longer explains %q", word)
+		}
+	}
+
+	// Every tool that hands back what somebody else wrote must carry the
+	// caveat in its own description, because that is all a `tools/list` reader
+	// gets.
+	pulseDerived := map[string]bool{
+		ToolLookupIndicator: true,
+		ToolGetPulse:        true,
+		ToolSearchPulses:    true,
+	}
+	for _, tool := range toolDefinitions() {
+		name := tool["name"].(string)
+		if !pulseDerived[name] {
+			continue
+		}
+		desc := tool["description"].(string)
+		if !mentionsQuality(desc) {
+			t.Errorf("%s's description does not caution about source quality: %q", name, desc)
+		}
+	}
+}
+
+// mentionsQuality is deliberately loose about wording and strict about the
+// idea: the description has to tell the reader that what comes back was
+// written by someone whose care is unknown.
+func mentionsQuality(desc string) bool {
+	for _, marker := range []string{"uneven", "community submissions", "feed dump", "not evidence", "not a verdict", "never treat a hit as a verdict"} {
+		if strings.Contains(desc, marker) {
+			return true
+		}
+	}
+	return false
+}
