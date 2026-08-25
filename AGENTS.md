@@ -27,6 +27,7 @@ make build   # → dist/otx-lookup  (NEVER `go build` directly — it drops the 
 make test    # go test -race -cover ./...   (fully offline)
 make e2e     # live tests against the real OTX API (network required)
 make check   # lint + test + build-all
+make verify-release  # gate: .notarized marker + freshness (run before upload)
 ```
 
 Go 1.25.0, standard library only — `go.mod` has no `require` block. Shared code
