@@ -184,12 +184,9 @@ Nothing that is trimmed is unreachable: raise `context_top` / `references_top`
 
 ## Everything is returned inline
 
-This server writes no files, owns no output directory, and takes no path
-argument — so it behaves identically against a client that has no filesystem of
-its own. Large lists used to be spilled to a `workspace_root`; they are not any
-more.
+No file is written and no path comes back, so the size of a response is yours to
+set. `limit` bounds a pulse list, and `get_pulse` pages its indicators with
+`limit` + `page` (`indicators_held` is the total, so you know when to stop).
 
-That makes the size of a response yours to set. `limit` bounds a pulse list, and
-`get_pulse` pages its indicators with `limit` + `page` (`indicators_held` is the
-total, so you know when to stop). A feed-dump pulse can hold thousands of
-indicators: ask for a page you can hold rather than for all of them.
+A feed-dump pulse can hold thousands of indicators: ask for a page you can hold
+rather than for all of them.
