@@ -111,7 +111,7 @@ bbc.co.uk  [domain]  22 pulses held, 1 shown  CAPPED
 otx-lookup mcp
 ```
 
-ツール: `lookup_indicator` / `get_pulse` / `search_pulses` / `cache_status` / `get_usage`。**まず `get_usage` を呼ぶこと** — 完全なリファレンス、結果スキーマ、エラー復旧表が返る。tool エラーは構造化 JSON（`{code, message}`）。pulse が 0 件なのは正常な結果であってエラーではない。大きい結果は `workspace_root` にファイル出力し、パスと件数サマリのみ返すので、エージェントのコンテキストを溢れさせない。
+ツール: `lookup_indicator` / `get_pulse` / `search_pulses` / `cache_status` / `get_usage`。**まず `get_usage` を呼ぶこと** — 完全なリファレンス、結果スキーマ、エラー復旧表が返る。tool エラーは構造化 JSON（`{code, message}`）。pulse が 0 件なのは正常な結果であってエラーではない。結果は常にインラインで返る — サーバーはファイルを書かずパス引数も取らないので、ファイルシステムを持たないクライアントでも動作する。応答量は呼び出し側が決める: `limit` が pulse 一覧を、`get_pulse` は `limit` + `page` で indicator をページングし、`context_top` / `references_top` が集計の打ち切りを制御する。
 
 Claude Code への登録:
 
@@ -139,8 +139,6 @@ Claude Code への登録:
 | キャッシュ dir | `[cache] dir` | `OTX_LOOKUP_CACHE_DIR` | `~/.cache/otx-lookup` |
 | ネットワークタイムアウト | `[network] timeout_seconds` | `OTX_LOOKUP_TIMEOUT_SECONDS` | `30` |
 | 1 時間あたり要求予算 | `[ratelimit] max_per_hour` | `OTX_LOOKUP_MAX_PER_HOUR` | (キーの有無から決定) |
-| MCP inline 上限 | `[mcp] inline_max_records` | `OTX_LOOKUP_MCP_INLINE_MAX` | `200` |
-| MCP workspace | `[mcp] workspace` | `OTX_LOOKUP_WORKSPACE` | (なし) |
 
 `OTX_LOOKUP_API_KEY` に加えて `OTX_API_KEY` も受け付ける。公式 OTX SDK 群が慣習的に使っている変数名であり、それ用に整えた環境がそのまま動くようにするため。
 

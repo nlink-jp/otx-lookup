@@ -9,7 +9,6 @@ import (
 
 	"github.com/nlink-jp/otx-lookup/internal/engine"
 	"github.com/nlink-jp/otx-lookup/internal/otx"
-	"github.com/nlink-jp/otx-lookup/internal/workspace"
 )
 
 // Tool names. They are referenced by the embedded manual, and a meta-test pins
@@ -67,7 +66,8 @@ func toolDefinitions() []map[string]any {
 					"limit":          map[string]any{"type": "integer", "description": "Pulses to list."},
 					"anonymous":      map[string]any{"type": "boolean", "description": "Query without the configured API key, so the lookup is not recorded against the OTX account."},
 					"refresh":        map[string]any{"type": "boolean", "description": "Bypass the result cache."},
-					"workspace_root": map[string]any{"type": "string", "description": "Directory for file-mediated results when the pulse list is large."},
+					"context_top":    map[string]any{"type": "integer", "description": "Values kept per aggregate category, ranked by how many pulses named each (default 25). Raise it to see the least-corroborated tail; context_omitted counts what was dropped."},
+					"references_top": map[string]any{"type": "integer", "description": "References kept (default 25). references_omitted counts what was dropped."},
 				},
 				"required": []string{"indicator"},
 			},
@@ -82,12 +82,12 @@ func toolDefinitions() []map[string]any {
 			"inputSchema": map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"pulse_id":       map[string]any{"type": "string", "description": "The pulse id, as returned by lookup_indicator."},
-					"indicators":     map[string]any{"type": "boolean", "description": "Include the indicators the pulse carries."},
-					"limit":          map[string]any{"type": "integer", "description": "Maximum indicators to return."},
-					"anonymous":      map[string]any{"type": "boolean", "description": "Query without the configured API key."},
-					"refresh":        map[string]any{"type": "boolean", "description": "Bypass the result cache."},
-					"workspace_root": map[string]any{"type": "string", "description": "Directory for file-mediated results when the indicator list is large."},
+					"pulse_id":   map[string]any{"type": "string", "description": "The pulse id, as returned by lookup_indicator."},
+					"indicators": map[string]any{"type": "boolean", "description": "Include the indicators the pulse carries."},
+					"limit":      map[string]any{"type": "integer", "description": "Indicators per page. A feed-dump pulse holds thousands, so keep this small enough for your context."},
+					"page":       map[string]any{"type": "integer", "description": "1-based indicator page (default 1). indicators_held is the total, so page through it rather than asking for everything at once."},
+					"anonymous":  map[string]any{"type": "boolean", "description": "Query without the configured API key."},
+					"refresh":    map[string]any{"type": "boolean", "description": "Bypass the result cache."},
 				},
 				"required": []string{"pulse_id"},
 			},
@@ -142,7 +142,8 @@ type lookupArgs struct {
 	Limit         int      `json:"limit"`
 	Anonymous     bool     `json:"anonymous"`
 	Refresh       bool     `json:"refresh"`
-	WorkspaceRoot string   `json:"workspace_root"`
+	ContextTop    int      `json:"context_top"`
+	ReferencesTop int      `json:"references_top"`
 }
 
 func (s *Server) lookupIndicator(ctx context.Context, raw json.RawMessage) (any, error) {
@@ -174,13 +175,26 @@ func (s *Server) lookupIndicator(ctx context.Context, raw json.RawMessage) (any,
 // would accept — 63 KB of it 1,705 tags, most of them scraped noise from
 // feed-dump pulses. The categories are ranked by how many pulses named each
 // value, so the tail is the least-corroborated part and the first thing that
-// should go. Every value dropped is counted, and with a workspace the complete
-// result is written to a file — the tool does not get to quietly shrink an
-// answer.
+// should go. Every value dropped is counted in `context_omitted` /
+// `references_omitted`, and `context_top` / `references_top` raise the cut on
+// demand — the tool does not get to quietly shrink an answer, and nothing it
+// holds back is unreachable.
 const (
 	contextTopN    = 25
 	referencesTopN = 25
 )
+
+// topOr returns a caller-supplied cap, or the default when unset. A negative
+// value means "no cap": an operator who wants the raw aggregate can say so.
+func topOr(v, def int) int {
+	if v < 0 {
+		return -1
+	}
+	if v == 0 {
+		return def
+	}
+	return v
+}
 
 // lookupPayload is what lookup_indicator returns. It embeds the engine result
 // so the documented field names stay at the top level, and carries the
@@ -189,9 +203,6 @@ type lookupPayload struct {
 	*engine.Result
 	ContextOmitted    map[string]int `json:"context_omitted,omitempty"`
 	ReferencesOmitted int            `json:"references_omitted,omitempty"`
-	PulsesFile        string         `json:"pulses_file,omitempty"`
-	PulsesInFile      int            `json:"pulses_in_file,omitempty"`
-	FullResultFile    string         `json:"full_result_file,omitempty"`
 	Note              string         `json:"note,omitempty"`
 }
 
@@ -199,14 +210,17 @@ func (s *Server) trimLookup(res *engine.Result, a lookupArgs) *lookupPayload {
 	trimmed := *res
 	out := &lookupPayload{Result: &trimmed}
 
+	ctxTop := topOr(a.ContextTop, contextTopN)
+	refTop := topOr(a.ReferencesTop, referencesTopN)
+
 	omitted := map[string]int{}
 	c := res.Context
-	c.Adversaries, omitted["adversaries"] = trimCounted(res.Context.Adversaries)
-	c.MalwareFamilies, omitted["malware_families"] = trimCounted(res.Context.MalwareFamilies)
-	c.AttackIDs, omitted["attack_ids"] = trimCounted(res.Context.AttackIDs)
-	c.Industries, omitted["industries"] = trimCounted(res.Context.Industries)
-	c.TargetedCountries, omitted["targeted_countries"] = trimCounted(res.Context.TargetedCountries)
-	c.Tags, omitted["tags"] = trimCounted(res.Context.Tags)
+	c.Adversaries, omitted["adversaries"] = trimCounted(res.Context.Adversaries, ctxTop)
+	c.MalwareFamilies, omitted["malware_families"] = trimCounted(res.Context.MalwareFamilies, ctxTop)
+	c.AttackIDs, omitted["attack_ids"] = trimCounted(res.Context.AttackIDs, ctxTop)
+	c.Industries, omitted["industries"] = trimCounted(res.Context.Industries, ctxTop)
+	c.TargetedCountries, omitted["targeted_countries"] = trimCounted(res.Context.TargetedCountries, ctxTop)
+	c.Tags, omitted["tags"] = trimCounted(res.Context.Tags, ctxTop)
 	trimmed.Context = c
 	for k, n := range omitted {
 		if n == 0 {
@@ -217,53 +231,30 @@ func (s *Server) trimLookup(res *engine.Result, a lookupArgs) *lookupPayload {
 		out.ContextOmitted = omitted
 	}
 
-	if len(res.References) > referencesTopN {
-		trimmed.References = res.References[:referencesTopN]
-		out.ReferencesOmitted = len(res.References) - referencesTopN
+	if refTop >= 0 && len(res.References) > refTop {
+		trimmed.References = res.References[:refTop]
+		out.ReferencesOmitted = len(res.References) - refTop
 	}
 
-	// A heavily-reported indicator carries dozens of pulses. Spilling them to a
-	// file keeps an agent's context for the analysis rather than the listing.
-	if len(res.Pulses) > s.inlineMax() {
-		if path, err := s.spill(a.WorkspaceRoot, "pulses-"+safeSlug(a.Indicator)+".jsonl", asRaw(res.Pulses)); err == nil {
-			trimmed.Pulses = res.Pulses[:s.inlineMax()]
-			out.PulsesFile = path
-			out.PulsesInFile = len(res.Pulses)
-		}
-	}
-
-	if out.ContextOmitted == nil && out.ReferencesOmitted == 0 && out.PulsesFile == "" {
+	// The pulse list is bounded by the caller's own `limit`, so it is never
+	// trimmed here: whatever was asked for is returned whole.
+	if out.ContextOmitted == nil && out.ReferencesOmitted == 0 {
 		return out
 	}
-
-	// Something was held back, so offer the complete answer as a file when
-	// there is anywhere to put it.
-	if path, err := s.spillJSON(a.WorkspaceRoot, "lookup-"+safeSlug(a.Indicator)+".json", res); err == nil {
-		out.FullResultFile = path
-	}
-	out.Note = trimNote(out)
+	out.Note = trimNote(out, ctxTop)
 	return out
 }
 
-func trimNote(out *lookupPayload) string {
-	parts := make([]string, 0, 3)
+func trimNote(out *lookupPayload, ctxTop int) string {
+	parts := make([]string, 0, 2)
 	if n := total(out.ContextOmitted); n > 0 {
 		parts = append(parts, fmt.Sprintf("%d aggregate values beyond the top %d per category were omitted "+
-			"(they are the least-corroborated, one or two pulses each)", n, contextTopN))
+			"(they are the least-corroborated, one or two pulses each)", n, ctxTop))
 	}
 	if out.ReferencesOmitted > 0 {
 		parts = append(parts, fmt.Sprintf("%d references were omitted", out.ReferencesOmitted))
 	}
-	if out.PulsesFile != "" {
-		parts = append(parts, fmt.Sprintf("%d pulses were written to pulses_file", out.PulsesInFile))
-	}
-	note := strings.Join(parts, "; ") + "."
-	if out.FullResultFile != "" {
-		note += " The complete result is in full_result_file."
-	} else {
-		note += " Pass workspace_root to receive the complete result as a file."
-	}
-	return note
+	return strings.Join(parts, "; ") + ". Raise context_top / references_top to see them."
 }
 
 func total(m map[string]int) int {
@@ -276,20 +267,20 @@ func total(m map[string]int) int {
 
 // trimCounted keeps the top of an already-ranked category and reports how many
 // were dropped.
-func trimCounted(v []engine.Counted) ([]engine.Counted, int) {
-	if len(v) <= contextTopN {
+func trimCounted(v []engine.Counted, top int) ([]engine.Counted, int) {
+	if top < 0 || len(v) <= top {
 		return v, 0
 	}
-	return v[:contextTopN], len(v) - contextTopN
+	return v[:top], len(v) - top
 }
 
 type pulseArgs struct {
-	PulseID       string `json:"pulse_id"`
-	Indicators    bool   `json:"indicators"`
-	Limit         int    `json:"limit"`
-	Anonymous     bool   `json:"anonymous"`
-	Refresh       bool   `json:"refresh"`
-	WorkspaceRoot string `json:"workspace_root"`
+	PulseID    string `json:"pulse_id"`
+	Indicators bool   `json:"indicators"`
+	Limit      int    `json:"limit"`
+	Page       int    `json:"page"`
+	Anonymous  bool   `json:"anonymous"`
+	Refresh    bool   `json:"refresh"`
 }
 
 func (s *Server) getPulse(ctx context.Context, raw json.RawMessage) (any, error) {
@@ -304,25 +295,11 @@ func (s *Server) getPulse(ctx context.Context, raw json.RawMessage) (any, error)
 	res, err := s.New(a.Anonymous).Pulse(ctx, a.PulseID, engine.PulseOptions{
 		Indicators: a.Indicators,
 		Limit:      a.Limit,
+		Page:       a.Page,
 		Refresh:    a.Refresh,
 	})
 	if err != nil {
 		return nil, err
-	}
-
-	if len(res.Indicators) > s.inlineMax() {
-		path, werr := s.spill(a.WorkspaceRoot, "indicators-"+safeSlug(a.PulseID)+".jsonl", asRaw(res.Indicators))
-		if werr == nil {
-			trimmed := *res
-			trimmed.Indicators = res.Indicators[:s.inlineMax()]
-			return map[string]any{
-				"result":             trimmed,
-				"indicators_file":    path,
-				"indicators_in_file": len(res.Indicators),
-				"note": fmt.Sprintf("%d indicators were written to the file; the first %d are inline.",
-					len(res.Indicators), s.inlineMax()),
-			}, nil
-		}
 	}
 	return res, nil
 }
@@ -358,82 +335,6 @@ func (s *Server) cacheStatus() (any, error) {
 		"note": "The TTL is applied at read time, so lowering it in the config expires " +
 			"entries already on disk. Keyed and anonymous answers are cached separately.",
 	}, nil
-}
-
-func (s *Server) inlineMax() int {
-	if s.Cfg != nil && s.Cfg.MCPInlineMax > 0 {
-		return s.Cfg.MCPInlineMax
-	}
-	return 200
-}
-
-// spill writes records to the caller's workspace, falling back to the
-// configured one. It returns an error when neither is set, in which case the
-// caller keeps the result inline rather than losing it.
-func (s *Server) spill(root, name string, records []json.RawMessage) (string, error) {
-	ws, err := s.openWorkspace(root)
-	if err != nil {
-		return "", err
-	}
-	defer func() { _ = ws.Close() }()
-	return ws.WriteJSONL(name, records)
-}
-
-// spillJSON writes one complete document, for the case where the inline answer
-// had to be trimmed and the full one still has to be reachable.
-func (s *Server) spillJSON(root, name string, v any) (string, error) {
-	ws, err := s.openWorkspace(root)
-	if err != nil {
-		return "", err
-	}
-	defer func() { _ = ws.Close() }()
-	return ws.WriteJSON(name, v)
-}
-
-func (s *Server) openWorkspace(root string) (*workspace.Workspace, error) {
-	if strings.TrimSpace(root) == "" && s.Cfg != nil {
-		root = s.Cfg.WorkspaceDir
-	}
-	if strings.TrimSpace(root) == "" {
-		return nil, fmt.Errorf("no workspace_root given and none configured")
-	}
-	return workspace.Open(root)
-}
-
-func asRaw[T any](items []T) []json.RawMessage {
-	out := make([]json.RawMessage, 0, len(items))
-	for _, it := range items {
-		b, err := json.Marshal(it)
-		if err != nil {
-			continue
-		}
-		out = append(out, b)
-	}
-	return out
-}
-
-// safeSlug reduces an indicator or id to something usable in a filename. The
-// value can be a URL or a malware family id carrying slashes and brackets, so
-// nothing is trusted through.
-func safeSlug(s string) string {
-	var b strings.Builder
-	for _, r := range s {
-		switch {
-		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '-', r == '.':
-			b.WriteRune(r)
-		case r >= 'A' && r <= 'Z':
-			b.WriteRune(r + ('a' - 'A'))
-		default:
-			b.WriteByte('_')
-		}
-		if b.Len() >= 60 {
-			break
-		}
-	}
-	if b.Len() == 0 {
-		return "result"
-	}
-	return strings.Trim(b.String(), ".")
 }
 
 func decodeArgs(raw json.RawMessage, into any) error {

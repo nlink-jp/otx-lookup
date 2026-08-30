@@ -38,7 +38,6 @@ internal/otx/           OTX DirectConnect client (X-OTX-API-KEY header)
 internal/cache/         Fixed-TTL JSON-file cache, atomic writes, TTL applied at read time
 internal/config/        Sectioned-TOML subset + OTX_LOOKUP_* / OTX_API_KEY resolution
 internal/engine/        classify → cache → otx → context aggregation; shared by CLI + MCP
-internal/workspace/     Agent-provided output dir + os.Root containment (file-mediated MCP)
 internal/app/           Dispatch + lookup/pulse/search/cache/mcp; text and JSON rendering
 internal/mcp/           Zero-dep stdio JSON-RPC 2.0 server; embedded get_usage manual
 e2e/                    Live tests behind the `e2e` build tag

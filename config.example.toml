@@ -60,14 +60,3 @@
 # The OTX_LOOKUP_MAX_PER_HOUR environment variable overrides this value.
 # max_per_hour = 0   # 0 = use the ceiling implied by whether a key is set
 
-[mcp]
-# Records an MCP tool returns inline before writing them to a file instead.
-# An agent's context is scarcer than disk, and a pulse's indicator list runs
-# to thousands of entries.
-# The OTX_LOOKUP_MCP_INLINE_MAX environment variable overrides this value.
-# inline_max_records = 200
-
-# Default directory for file-mediated MCP results, used when a tool call does
-# not pass workspace_root. With neither set, large results are capped inline.
-# The OTX_LOOKUP_WORKSPACE environment variable overrides this value.
-# workspace = "~/.cache/otx-lookup/workspace"

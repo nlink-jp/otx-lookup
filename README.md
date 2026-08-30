@@ -115,7 +115,7 @@ data and opposite in meaning, so they are never printed the same way.
 otx-lookup mcp
 ```
 
-Tools: `lookup_indicator`, `get_pulse`, `search_pulses`, `cache_status`, `get_usage`. **Call `get_usage` first** — it returns the full reference, the result schema, and the error-recovery table. Tool errors are structured JSON (`{code, message}`); an indicator with no pulses is a normal result, not an error. Large results are written to `workspace_root` and only the path plus a count summary is returned, so an agent's context is not flooded.
+Tools: `lookup_indicator`, `get_pulse`, `search_pulses`, `cache_status`, `get_usage`. **Call `get_usage` first** — it returns the full reference, the result schema, and the error-recovery table. Tool errors are structured JSON (`{code, message}`); an indicator with no pulses is a normal result, not an error. Every result is returned inline — the server writes no files and takes no path argument, so it works against a client with no filesystem of its own. You size the response: `limit` bounds a pulse list, `get_pulse` pages indicators with `limit` + `page`, and `context_top` / `references_top` control the aggregate cut.
 
 Register it with Claude Code:
 
@@ -143,8 +143,6 @@ Register it with Claude Code:
 | Cache directory | `[cache] dir` | `OTX_LOOKUP_CACHE_DIR` | `~/.cache/otx-lookup` |
 | Network timeout | `[network] timeout_seconds` | `OTX_LOOKUP_TIMEOUT_SECONDS` | `30` |
 | Hourly request budget | `[ratelimit] max_per_hour` | `OTX_LOOKUP_MAX_PER_HOUR` | (from key presence) |
-| MCP inline limit | `[mcp] inline_max_records` | `OTX_LOOKUP_MCP_INLINE_MAX` | `200` |
-| MCP workspace | `[mcp] workspace` | `OTX_LOOKUP_WORKSPACE` | (none) |
 
 `OTX_API_KEY` is accepted as well as `OTX_LOOKUP_API_KEY` because that is the variable the official OTX SDKs conventionally use — an environment already set up for them works here unchanged.
 

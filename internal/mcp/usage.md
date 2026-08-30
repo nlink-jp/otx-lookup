@@ -55,7 +55,8 @@ Campaign context for one indicator.
 | `limit` | integer | Pulses to list. |
 | `anonymous` | boolean | Query without the configured API key. |
 | `refresh` | boolean | Bypass the result cache. |
-| `workspace_root` | string | Directory for file-mediated results. |
+| `context_top` | integer | Values kept per aggregate category (default 25). `-1` keeps them all. |
+| `references_top` | integer | References kept (default 25). `-1` keeps them all. |
 
 Key fields in the result:
 
@@ -89,10 +90,10 @@ indicators reported alongside it.
 |---|---|---|
 | `pulse_id` | string, required | From `lookup_indicator`. |
 | `indicators` | boolean | Include the indicators the pulse carries. |
-| `limit` | integer | Maximum indicators to return. |
+| `limit` | integer | Indicators per page. |
 | `anonymous` | boolean | Query without the configured API key. |
 | `refresh` | boolean | Bypass the result cache. |
-| `workspace_root` | string | Directory for file-mediated results. |
+| `page` | integer | 1-based indicator page (default 1). |
 
 `indicators_exact` tells you whether `indicators_held` can be trusted. Without
 an API key the pulse detail embeds indicators but reports no total, so
@@ -173,16 +174,22 @@ dropped is always the least-corroborated tail. Nothing is dropped silently:
 - `context_omitted` — a per-category count of what was left out, absent when
   nothing was.
 - `references_omitted` — the same for references.
-- `full_result_file` — with a `workspace_root`, the complete untrimmed result
-  as JSON. Read it when the tail matters.
 - `note` — plain-language summary of all of the above.
 
 An untrimmed result carries none of these fields, so their presence is itself
 the signal that you are looking at a partial view.
 
-## File-mediated results
+Nothing that is trimmed is unreachable: raise `context_top` / `references_top`
+(or pass `-1` for no cap) and the tail comes back in the same result.
 
-When a pulse list or indicator list exceeds the configured inline limit
-(default 200) and a `workspace_root` is given, the records are written there as
-JSON Lines and the result carries the path, the total, and the first records
-inline. Read the file when you need the rest; do not ask for it to be inlined.
+## Everything is returned inline
+
+This server writes no files, owns no output directory, and takes no path
+argument — so it behaves identically against a client that has no filesystem of
+its own. Large lists used to be spilled to a `workspace_root`; they are not any
+more.
+
+That makes the size of a response yours to set. `limit` bounds a pulse list, and
+`get_pulse` pages its indicators with `limit` + `page` (`indicators_held` is the
+total, so you know when to stop). A feed-dump pulse can hold thousands of
+indicators: ask for a page you can hold rather than for all of them.

@@ -63,7 +63,6 @@ func newEngine(t *testing.T, s *stub) *Engine {
 		BaseURL:      config.DefaultBaseURL,
 		DefaultLimit: 10,
 		CacheTTL:     time.Hour,
-		MCPInlineMax: 200,
 	}
 	e := New(cfg, &cache.Store{Dir: t.TempDir()}, s)
 	e.Now = func() time.Time { return time.Unix(1_700_000_000, 0) }
@@ -355,7 +354,7 @@ func TestCacheIsScopedToAuth(t *testing.T) {
 	anonStub := &stub{generals: map[string]string{"domain/paypal.com": body}}
 	dir := t.TempDir()
 
-	cfg := &config.Config{BaseURL: config.DefaultBaseURL, DefaultLimit: 10, CacheTTL: time.Hour, MCPInlineMax: 200}
+	cfg := &config.Config{BaseURL: config.DefaultBaseURL, DefaultLimit: 10, CacheTTL: time.Hour}
 	anon := New(cfg, &cache.Store{Dir: dir}, anonStub)
 	anon.Now = func() time.Time { return time.Unix(1_700_000_000, 0) }
 	if _, err := anon.Lookup(context.Background(), "paypal.com", Options{}); err != nil {

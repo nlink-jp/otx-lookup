@@ -26,10 +26,6 @@ const (
 	// edited rarely and a triage revisits the same indicator several times in a
 	// session, so a day keeps that down to one request.
 	DefaultCacheTTL = 24 * time.Hour
-	// DefaultMCPInlineMax is how many records an MCP tool returns inline before
-	// switching to a file under workspace_root.
-	DefaultMCPInlineMax = 200
-
 	// AnonymousRateCeiling and KeyedRateCeiling are the request budgets OTX
 	// publishes. They have to be tracked locally: unlike ip.thc.org, OTX
 	// returns no remaining-budget header, so there is nothing to pace on.
@@ -46,8 +42,6 @@ type Config struct {
 	CacheTTL     time.Duration // how long a cached answer stays fresh
 	Timeout      time.Duration // network timeout per exchange
 	MaxPerHour   int           // request budget; 0 means "derive from key presence"
-	MCPInlineMax int           // MCP records returned inline before spilling to a file
-	WorkspaceDir string        // default MCP file-mediated output root
 }
 
 // Load resolves configuration. If configPath is empty the default location
@@ -60,7 +54,6 @@ func Load(configPath string, timeoutOverride time.Duration) (*Config, error) {
 		CacheDir:     DefaultCacheDir(),
 		CacheTTL:     DefaultCacheTTL,
 		Timeout:      DefaultTimeout,
-		MCPInlineMax: DefaultMCPInlineMax,
 	}
 
 	if configPath == "" {
@@ -129,9 +122,6 @@ func validate(cfg *Config) error {
 	if cfg.DefaultLimit < 1 {
 		return fmt.Errorf("[query] default_limit must be at least 1")
 	}
-	if cfg.MCPInlineMax < 1 {
-		return fmt.Errorf("[mcp] inline_max_records must be at least 1")
-	}
 	if cfg.MaxPerHour < 0 {
 		return fmt.Errorf("[ratelimit] max_per_hour cannot be negative")
 	}
@@ -189,18 +179,6 @@ func applySections(cfg *Config, sections map[string]map[string]string) error {
 			cfg.MaxPerHour = n
 		}
 	}
-	if m := sections["mcp"]; m != nil {
-		if v := m["inline_max_records"]; v != "" {
-			n, err := parseInt(v)
-			if err != nil {
-				return fmt.Errorf("[mcp] inline_max_records: %w", err)
-			}
-			cfg.MCPInlineMax = n
-		}
-		if v := m["workspace"]; v != "" {
-			cfg.WorkspaceDir = expandHome(v)
-		}
-	}
 	return nil
 }
 
@@ -246,16 +224,6 @@ func applyEnv(cfg *Config) error {
 			return fmt.Errorf("OTX_LOOKUP_MAX_PER_HOUR: %w", err)
 		}
 		cfg.MaxPerHour = n
-	}
-	if v := os.Getenv("OTX_LOOKUP_MCP_INLINE_MAX"); v != "" {
-		n, err := parseInt(v)
-		if err != nil {
-			return fmt.Errorf("OTX_LOOKUP_MCP_INLINE_MAX: %w", err)
-		}
-		cfg.MCPInlineMax = n
-	}
-	if v := os.Getenv("OTX_LOOKUP_WORKSPACE"); v != "" {
-		cfg.WorkspaceDir = expandHome(v)
 	}
 	return nil
 }

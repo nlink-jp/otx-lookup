@@ -71,8 +71,9 @@ even RFC 5737 documentation addresses are not clean: `192.0.2.1` carries pulses.
 
 `.golangci.yml` excludes exactly one thing — `fmt.Fprint*` to the CLI's own
 streams — and nothing else. errcheck stays on everywhere else because it is what
-caught a real defect here: a deferred `Close` in `internal/workspace` could have
-returned the path to a truncated file while reporting how many records it held.
+caught a real defect here, back when the server still wrote files: a deferred
+`Close` could return the path to a truncated file while reporting how many
+records it held. The file writing is gone; the reason to keep errcheck is not.
 
 ## Layout
 
@@ -83,7 +84,6 @@ internal/otx/                Upstream client: indicator sections, pulse detail/r
 internal/cache/              Fixed-TTL JSON-file cache, atomic writes
 internal/config/             Sectioned-TOML subset + OTX_LOOKUP_* / OTX_API_KEY env
 internal/engine/             Shared core: classify, cache, fetch, aggregate campaign context
-internal/workspace/          File-mediated MCP output, os.Root contained
 internal/app/                CLI shell: subcommand dispatch, flags, text/JSON rendering
                              (auth.go holds `auth check`, the only key validator)
 internal/mcp/                Zero-dep stdio JSON-RPC 2.0 server + embedded usage.md

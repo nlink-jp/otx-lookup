@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -52,7 +51,6 @@ func newServer(t *testing.T, stub *stubEngine) (*Server, *stubEngine) {
 		DefaultLimit: 10,
 		CacheTTL:     24 * time.Hour,
 		CacheDir:     t.TempDir(),
-		MCPInlineMax: 2,
 	}
 	return &Server{
 		Cfg:     cfg,
@@ -314,42 +312,48 @@ func TestMalformedFrameGetsAParseError(t *testing.T) {
 	}
 }
 
-// Large lists go to a file so an agent's context is spent on analysis rather
-// than on a listing.
-func TestLargeIndicatorListSpillsToTheWorkspace(t *testing.T) {
+// A feed-dump pulse holds thousands of indicators. The server never spills them
+// to a file — it returns the page it was asked for, and the caller walks the
+// rest with `page`, so the result is readable by a client with no filesystem.
+func TestIndicatorPagingReachesEveryIndicator(t *testing.T) {
 	inds := make([]otx.PulseIndicator, 5)
 	for i := range inds {
-		inds[i] = otx.PulseIndicator{ID: int64(i), Indicator: "x.test", Type: "domain", IsActive: 1}
+		inds[i] = otx.PulseIndicator{ID: int64(i), Indicator: fmt.Sprintf("x%d.test", i), Type: "domain", IsActive: 1}
 	}
-	s, _ := newServer(t, &stubEngine{pulse: &engine.PulseResult{
-		ID: "p1", Name: "Big", Indicators: inds, IndicatorsShown: 5, IndicatorsHeld: -1,
-	}})
-	ws := t.TempDir()
-
-	responses := converse(t, s, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_pulse","arguments":{"pulse_id":"p1","indicators":true,"workspace_root":"`+ws+`"}}}`)
-	payload, isErr := toolPayload(t, responses[0])
-	if isErr {
-		t.Fatalf("call failed: %v", payload)
+	seen := map[string]bool{}
+	for page := 1; page <= 3; page++ {
+		lo := (page - 1) * 2
+		hi := min(lo+2, len(inds))
+		var got []otx.PulseIndicator
+		if lo < len(inds) {
+			got = inds[lo:hi]
+		}
+		s, _ := newServer(t, &stubEngine{pulse: &engine.PulseResult{
+			ID: "p1", Name: "Big", Indicators: got, IndicatorsShown: len(got), IndicatorsHeld: len(inds),
+		}})
+		req := fmt.Sprintf(`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_pulse","arguments":{"pulse_id":"p1","indicators":true,"limit":2,"page":%d}}}`, page)
+		payload, isErr := toolPayload(t, converse(t, s, req)[0])
+		if isErr {
+			t.Fatalf("page %d failed: %v", page, payload)
+		}
+		for _, k := range []string{"indicators_file", "indicators_in_file"} {
+			if _, ok := payload[k]; ok {
+				t.Errorf("page %d still carries %q — file mediation was not removed", page, k)
+			}
+		}
+		list, _ := payload["indicators"].([]any)
+		for _, it := range list {
+			seen[it.(map[string]any)["indicator"].(string)] = true
+		}
 	}
-	path, _ := payload["indicators_file"].(string)
-	if path == "" {
-		t.Fatalf("no indicators_file in the result: %v", payload)
-	}
-	if payload["indicators_in_file"].(float64) != 5 {
-		t.Errorf("indicators_in_file = %v, want 5", payload["indicators_in_file"])
-	}
-	if !strings.HasPrefix(path, ws) {
-		t.Errorf("file %q was written outside the workspace %q", path, ws)
-	}
-	// The inline part is capped, but present, so the agent sees a sample.
-	inner := payload["result"].(map[string]any)
-	if n := len(inner["indicators"].([]any)); n != s.inlineMax() {
-		t.Errorf("inline indicators = %d, want %d", n, s.inlineMax())
+	if len(seen) != len(inds) {
+		t.Errorf("paging reached %d of %d indicators: %v", len(seen), len(inds), seen)
 	}
 }
 
-// With no workspace anywhere the result must still come back, just inline.
-func TestNoWorkspaceKeepsResultsInline(t *testing.T) {
+// Whatever the caller asked for comes back whole: the server has no threshold
+// of its own at which it starts holding indicators back.
+func TestIndicatorsAlwaysComeBackInline(t *testing.T) {
 	inds := make([]otx.PulseIndicator, 5)
 	s, _ := newServer(t, &stubEngine{pulse: &engine.PulseResult{ID: "p1", Indicators: inds}})
 	responses := converse(t, s,
@@ -359,10 +363,10 @@ func TestNoWorkspaceKeepsResultsInline(t *testing.T) {
 		t.Fatalf("call failed: %v", payload)
 	}
 	if _, ok := payload["indicators_file"]; ok {
-		t.Error("a file was reported without a workspace")
+		t.Error("the server wrote a file")
 	}
 	if len(payload["indicators"].([]any)) != 5 {
-		t.Errorf("the result was truncated with nowhere to put the rest: %v", payload["indicators"])
+		t.Errorf("the result was truncated: %v", payload["indicators"])
 	}
 }
 
@@ -478,42 +482,40 @@ func TestSmallResultIsNotAnnotated(t *testing.T) {
 	}
 }
 
-// With a workspace the complete answer is still reachable, so trimming costs
-// the caller nothing but a file read.
-func TestTrimmedResultIsWrittenInFull(t *testing.T) {
+// Trimming the aggregate tail must never make it unreachable: context_top
+// raises the cut, which is what replaced writing the full result to a file.
+func TestContextTopRaisesTheAggregateCut(t *testing.T) {
 	tags := make([]engine.Counted, 100)
 	for i := range tags {
 		tags[i] = engine.Counted{Value: fmt.Sprintf("tag-%d", i), Pulses: 1}
 	}
-	s, _ := newServer(t, &stubEngine{lookup: &engine.Result{
-		Query: "evil.test", Type: "domain", Context: engine.Context{Tags: tags},
-	}})
-	ws := t.TempDir()
+	newSrv := func() *Server {
+		s, _ := newServer(t, &stubEngine{lookup: &engine.Result{
+			Query: "evil.test", Type: "domain", Context: engine.Context{Tags: tags},
+		}})
+		return s
+	}
+	tagsIn := func(payload map[string]any) int {
+		ctx, _ := payload["context"].(map[string]any)
+		list, _ := ctx["tags"].([]any)
+		return len(list)
+	}
 
-	responses := converse(t, s,
-		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"lookup_indicator","arguments":{"indicator":"evil.test","workspace_root":"`+ws+`"}}}`)
-	payload, _ := toolPayload(t, responses[0])
+	payload, _ := toolPayload(t, converse(t, newSrv(),
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"lookup_indicator","arguments":{"indicator":"evil.test"}}}`)[0])
+	if n := tagsIn(payload); n != contextTopN {
+		t.Errorf("default cut kept %d tags, want %d", n, contextTopN)
+	}
+	if _, ok := payload["full_result_file"]; ok {
+		t.Error("the server wrote a file")
+	}
 
-	path, _ := payload["full_result_file"].(string)
-	if path == "" {
-		t.Fatalf("no full_result_file: %v", payload)
+	payload, _ = toolPayload(t, converse(t, newSrv(),
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"lookup_indicator","arguments":{"indicator":"evil.test","context_top":-1}}}`)[0])
+	if n := tagsIn(payload); n != 100 {
+		t.Errorf("context_top:-1 kept %d tags, want all 100", n)
 	}
-	if !strings.HasPrefix(path, ws) {
-		t.Errorf("file %q written outside the workspace", path)
-	}
-	b, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read back: %v", err)
-	}
-	var full struct {
-		Context struct {
-			Tags []any `json:"tags"`
-		} `json:"context"`
-	}
-	if err := json.Unmarshal(b, &full); err != nil {
-		t.Fatalf("file is not valid JSON: %v", err)
-	}
-	if len(full.Context.Tags) != 100 {
-		t.Errorf("the file holds %d tags, want all 100", len(full.Context.Tags))
+	if _, ok := payload["context_omitted"]; ok {
+		t.Errorf("nothing was omitted, so context_omitted must be absent: %v", payload["context_omitted"])
 	}
 }

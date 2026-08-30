@@ -4,6 +4,31 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **Every MCP result is returned inline.** The server no longer writes files,
+  owns no output directory, and takes no `workspace_root`: it works unchanged
+  against a client that has no filesystem of its own. Gone from the schemas are
+  `lookup_indicator.workspace_root` and `get_pulse.workspace_root`, and from the
+  results `pulses_file`, `pulses_in_file`, `full_result_file`, `indicators_file`
+  and `indicators_in_file`.
+- The aggregate trim stays — a lookup of a heavily-analysed CVE is mostly
+  scraped tags — but it is now escapable without a file: `lookup_indicator`
+  takes `context_top` and `references_top` (default 25, `-1` for no cap), so
+  the tail it holds back is always reachable in the same result.
+
+### Added
+
+- `get_pulse` takes `page`, so a feed-dump pulse's indicators can be walked with
+  `limit` + `page` instead of spilled to a file. `indicators_held` is the total.
+
+### Removed
+
+- `[mcp] inline_max_records` / `OTX_LOOKUP_MCP_INLINE_MAX` and `[mcp] workspace`
+  / `OTX_LOOKUP_WORKSPACE`. There is no inline threshold left to configure.
+
 ## [0.1.2] - 2026-08-10
 
 ### Changed

@@ -59,7 +59,8 @@ type PulseResult struct {
 // PulseOptions control a pulse fetch.
 type PulseOptions struct {
 	Indicators bool // list the indicators the pulse carries
-	Limit      int  // maximum indicators to return; 0 means all that were fetched
+	Limit      int  // indicators per page; 0 means all that were fetched
+	Page       int  // 1-based indicator page; 0 and 1 both mean the first
 	Refresh    bool // bypass the cache
 }
 
@@ -142,8 +143,12 @@ func (e *Engine) Pulse(ctx context.Context, id string, opts PulseOptions) (*Puls
 // Without a key it falls back to the set embedded in the detail, and says so by
 // leaving IndicatorsExact false.
 func (e *Engine) fillIndicators(ctx context.Context, pf PulseFetcher, res *PulseResult, detail *otx.PulseDetail, id string, opts PulseOptions) error {
+	pageNo := opts.Page
+	if pageNo < 1 {
+		pageNo = 1
+	}
 	if e.Fetcher.HasKey() {
-		page, err := pf.PulseIndicatorPage(ctx, id, 1, opts.Limit)
+		page, err := pf.PulseIndicatorPage(ctx, id, pageNo, opts.Limit)
 		if err == nil {
 			res.Indicators = page.Results
 			res.IndicatorsHeld = page.Count
@@ -158,8 +163,17 @@ func (e *Engine) fillIndicators(ctx context.Context, pf PulseFetcher, res *Pulse
 		res.Indicators = detail.Indicators
 	}
 
-	if opts.Limit > 0 && len(res.Indicators) > opts.Limit {
-		res.Indicators = res.Indicators[:opts.Limit]
+	// The embedded set is not paginated upstream, so page it here: without a
+	// key that array is everything the pulse will ever hand over, and a caller
+	// asking for page 2 must still be able to reach the rest of it.
+	if opts.Limit > 0 {
+		lo := (pageNo - 1) * opts.Limit
+		if lo >= len(res.Indicators) {
+			res.Indicators = nil
+		} else {
+			hi := min(lo+opts.Limit, len(res.Indicators))
+			res.Indicators = res.Indicators[lo:hi]
+		}
 	}
 	res.IndicatorsShown = len(res.Indicators)
 	return nil

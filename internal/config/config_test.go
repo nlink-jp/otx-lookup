@@ -79,8 +79,6 @@ timeout_seconds = 5
 max_per_hour = 42
 
 [mcp]
-inline_max_records = 7
-workspace = "/tmp/ws"
 `)
 	cfg, err := Load(path, 0)
 	if err != nil {
@@ -103,12 +101,6 @@ workspace = "/tmp/ws"
 	}
 	if cfg.MaxPerHour != 42 {
 		t.Errorf("MaxPerHour = %d, want 42", cfg.MaxPerHour)
-	}
-	if cfg.MCPInlineMax != 7 {
-		t.Errorf("MCPInlineMax = %d, want 7", cfg.MCPInlineMax)
-	}
-	if cfg.WorkspaceDir != "/tmp/ws" {
-		t.Errorf("WorkspaceDir = %q", cfg.WorkspaceDir)
 	}
 }
 
@@ -180,7 +172,6 @@ func TestInvalidValuesAreRejectedByName(t *testing.T) {
 		{"[query]\ndefault_limit = 0\n", "default_limit"},
 		{"[cache]\nttl_hours = -1\n", "ttl_hours"},
 		{"[network]\ntimeout_seconds = 0\n", "timeout_seconds"},
-		{"[mcp]\ninline_max_records = 0\n", "inline_max_records"},
 		{"[api]\nbase_url", "expected key = value"},
 	}
 	for _, tc := range tests {
@@ -201,7 +192,7 @@ func TestInvalidValuesAreRejectedByName(t *testing.T) {
 // it came from — a bulk run mixing keyed and anonymous lookups would otherwise
 // silently drop the key partway through.
 func TestAnonymousClearsKeyWithoutMutating(t *testing.T) {
-	cfg := &Config{APIKey: "secret", BaseURL: DefaultBaseURL, DefaultLimit: 1, MCPInlineMax: 1}
+	cfg := &Config{APIKey: "secret", BaseURL: DefaultBaseURL, DefaultLimit: 1}
 	anon := cfg.Anonymous()
 	if anon.HasKey() {
 		t.Error("Anonymous() left a key in place")
