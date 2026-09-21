@@ -129,6 +129,13 @@ docs/{en,ja}/                RFP (the design record)
   and `levelblue.com`. The API host is expected to move.
 - **Engine is shared** by the CLI and the MCP server so the two faces cannot
   give different answers for the same indicator.
+- **Every tool schema is closed** (`additionalProperties: false`, organization
+  ADR-021 §10). `closeSchemas` applies it as one pass over the finished tool
+  list rather than per literal, so a tool added later cannot forget it, and
+  `TestEveryToolSchemaIsClosed` reads the schemas back off `tools/list`. The
+  closed schema and `decodeArgs`' `DisallowUnknownFields` are two halves of one
+  contract — the schema stops a mistyped argument at the client, the decoder
+  stops it at the server — so do not drop either. Only the top level is closed.
 
 ## Gotchas
 

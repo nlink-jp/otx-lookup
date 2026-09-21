@@ -4,6 +4,18 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Every MCP tool schema now sets `additionalProperties: false`, as
+  organization ADR-021 §10 requires. A validating client refuses a mistyped
+  argument instead of forwarding it; the server already decoded strictly, so
+  the two halves of the contract now agree. Applied as one pass over the tool
+  list (`closeSchemas`) rather than per literal, so a tool added later cannot
+  omit it, and pinned by `TestEveryToolSchemaIsClosed` reading the schemas
+  back off `tools/list`.
+
 ## [0.2.0] - 2026-08-31
 
 ### Changed

@@ -40,8 +40,26 @@ const instructions = `otx-lookup attaches campaign context to an indicator of co
 	`than any single report, and never present a pulse hit as a malicious verdict — this server ` +
 	`returns claims, not conclusions.`
 
+// closeSchemas sets additionalProperties:false on every tool's top-level input
+// schema, as organization ADR-021 §10 requires: an agent's mistyped argument
+// then comes back as an error instead of being silently dropped.
+//
+// It is a pass over the finished list rather than a helper each schema has to
+// call, so a tool added later as a plain literal cannot forget it — the rule is
+// enforced by the one place every schema goes through, not by authors
+// remembering. Only the top level is touched; a nested object that deliberately
+// accepts free-form keys keeps whatever it declares.
+func closeSchemas(defs []map[string]any) []map[string]any {
+	for _, def := range defs {
+		if schema, ok := def["inputSchema"].(map[string]any); ok {
+			schema["additionalProperties"] = false
+		}
+	}
+	return defs
+}
+
 func toolDefinitions() []map[string]any {
-	return []map[string]any{
+	return closeSchemas([]map[string]any{
 		{
 			"name": ToolLookupIndicator,
 			"description": "Campaign context for one indicator (IPv4, IPv6, domain, hostname, URL, " +
@@ -116,7 +134,7 @@ func toolDefinitions() []map[string]any {
 			"description": "The full reference for this server: tools, arguments, result schema, and the error-recovery table. Call this first.",
 			"inputSchema": map[string]any{"type": "object", "properties": map[string]any{}},
 		},
-	}
+	})
 }
 
 func (s *Server) dispatch(ctx context.Context, name string, args json.RawMessage) (any, error) {
