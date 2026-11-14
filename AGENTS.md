@@ -30,7 +30,7 @@ make check   # lint + test + build-all
 make verify-release  # gate: notarized, fresh, runs at this version, clean linux archives (run before upload)
 ```
 
-Go 1.25.0, standard library only — `go.mod` has no `require` block. Shared code
+Go 1.27.4, standard library only — `go.mod` has no `require` block. Shared code
 (the release scripts, the sectioned-TOML reader, the `internal/mcp` skeleton)
 is vendored from sibling projects rather than imported, matching the series.
 
