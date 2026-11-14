@@ -27,6 +27,7 @@ make build   # → dist/otx-lookup  (NEVER `go build` directly — it drops the 
 make test    # go test -race -cover ./...   (fully offline)
 make e2e     # live tests against the real OTX API (network required)
 make check   # lint + test + build-all
+make vuln            # govulncheck over the build; `make package` runs it first and stops on a finding
 make verify-release  # gate: notarized, fresh, runs at this version, clean linux archives (run before upload)
 ```
 
